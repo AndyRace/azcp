@@ -1,5 +1,3 @@
-using System;
-
 namespace AzCp
 {
   public class Repository

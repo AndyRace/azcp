@@ -1,10 +1,8 @@
-// see: https://docs.microsoft.com/en-us/azure/storage/common/storage-use-data-movement-library
-// https://docs.microsoft.com/en-us/dotnet/api/microsoft.azure.storage.datamovement?view=azure-dotnet
 using Microsoft.Azure.Storage;
 using Microsoft.Azure.Storage.Blob;
 using Microsoft.Azure.Storage.DataMovement;
 using Microsoft.Extensions.Configuration;
-using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Hosting;
 using System;
 using System.Diagnostics;
 using System.Threading;
@@ -12,59 +10,45 @@ using System.Threading.Tasks;
 
 namespace AzCp
 {
-  public class App
+  class Application : IHostedService
   {
-    private readonly IConfigurationRoot _config;
-    private readonly ILogger<App> _logger;
-    private Repository _repo;
+    private readonly IConfiguration _configuration;
+    private readonly Repository _repo;
+
     public string SourcePath => _repo.SourcePath;
 
-    public App(IConfigurationRoot config, ILoggerFactory loggerFactory)
+    public Application(IConfiguration configuration)
     {
-      _logger = loggerFactory.CreateLogger<App>();
-      _config = config;
+      _configuration = configuration;
+      _repo = _configuration.GetSection("Repository").Get<Repository>();
     }
 
-    public async Task Run()
+    public Task StopAsync(CancellationToken cancellationToken)
     {
-      // List<string> emailAddresses = _config.GetSection("EmailAddresses").Get<List<string>>();
-      // foreach (string emailAddress in emailAddresses)
-      // {
-      //     _logger.LogInformation("Email address: {@EmailAddress}", emailAddress);
-      // }
+      return Task.CompletedTask;
+    }
 
-      _repo = _config.GetSection("Repository").Get<Repository>();
-
-      // string storageConnectionString = "DefaultEndpointsProtocol=https;AccountName=" + accountName + ";AccountKey=" + accountKey;
+    public async Task StartAsync(CancellationToken cancellationToken)
+    {
       // CloudStorageAccount account = CloudStorageAccount.Parse(storageConnectionString);
+      var connectionString = _configuration.GetConnectionString("StorageConnectionString");
+      CloudStorageAccount account = CloudStorageAccount.Parse(connectionString);
 
-      CloudStorageAccount account = CloudStorageAccount.Parse(_config.GetConnectionString("StorageConnectionString"));
-
-      //await ExecuteChoice(account);
       TransferManager.Configurations.ParallelOperations = _repo.ParallelOperations;
 
-      await TransferLocalFileToAzureBlob(account);
+      await TransferLocalFileToAzureBlob(account, cancellationToken);
     }
 
-    public async Task TransferLocalFileToAzureBlob1(CloudStorageAccount account)
-    {
-      string localFilePath = SourcePath;
-      CloudBlockBlob blob = await GetBlob(account);
-      TransferCheckpoint checkpoint = null;
-      SingleTransferContext context = GetSingleTransferContext(checkpoint);
-      WriteLine("\nTransfer started...\n");
-      Stopwatch stopWatch = Stopwatch.StartNew();
-      await TransferManager.UploadAsync(localFilePath, blob, null, context);
-      stopWatch.Stop();
-      WriteLine("\nTransfer operation completed in " + stopWatch.Elapsed.TotalSeconds + " seconds.");
-    }
-
-    public async Task TransferLocalFileToAzureBlob(CloudStorageAccount account)
+    public async Task TransferLocalFileToAzureBlob(CloudStorageAccount account, CancellationToken cancellationToken)
     {
       string localFilePath = SourcePath;
       var blob = await GetBlob(account);
       var context = GetSingleTransferContext(null);
-      var cancellationSource = new CancellationTokenSource();
+
+      //Console.CancelKeyPress += delegate {
+      //  DoQuit = true;
+      //  cancellationSource.Cancel();
+      //};
 
       // Display the config info
       var started = DateTime.Now;
@@ -83,53 +67,54 @@ namespace AzCp
       WriteLine();
 
       Stopwatch stopWatch = Stopwatch.StartNew();
-      Task task;
-      ConsoleKeyInfo keyinfo;
-      try
-      {
-        task = TransferManager.UploadAsync(localFilePath, blob, null, context, cancellationSource.Token);
-        while (!task.IsCompleted)
-        {
-          // back off
-          Thread.Sleep(2000);
 
-          if (Console.KeyAvailable)
+      var internalTokenSource = new CancellationTokenSource();
+      using (CancellationTokenSource linkedCts =
+             CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, internalTokenSource.Token))
+      {
+        try
+        {
+          var task = TransferManager.UploadAsync(localFilePath, blob, null, context, linkedCts.Token);
+          while (!task.IsCompleted)
           {
-            keyinfo = Console.ReadKey(true);
-            if (keyinfo.Key == ConsoleKey.C)
+            // back off
+            Thread.Sleep(500);
+
+            if (Console.KeyAvailable)
             {
-              cancellationSource.Cancel();
-              break;
+              var keyinfo = Console.ReadKey(true);
+              if (keyinfo.Key == ConsoleKey.C)
+              {
+                internalTokenSource.Cancel();
+                break;
+              }
             }
           }
+          await task;
         }
-        await task;
-      }
-      catch (Exception e)
-      {
-        WriteLine();
-        WriteLine("The transfer is cancelled: {0}", e.Message);
+        catch (TaskCanceledException e)
+        {
+          WriteLine("The transfer is cancelled: {0}", e.Message);
+        }
       }
 
-      if (cancellationSource.IsCancellationRequested)
+      if (internalTokenSource.IsCancellationRequested)
       {
-        WriteLine();
+        var json = SimpleJsonSerializer<TransferCheckpoint>.WriteFromObject(context.LastCheckpoint);
+
         WriteLine("Transfer will resume in 3 seconds...");
         Thread.Sleep(3000);
 
         // Mimic persisting and resuming
-        var json = SimpleJsonSerializer<TransferCheckpoint>.WriteFromObject(context.LastCheckpoint);
         TransferCheckpoint checkpointResume = SimpleJsonSerializer<TransferCheckpoint>.ReadToObject(json);
         var contextResume = GetSingleTransferContext(checkpointResume);
 
-        WriteLine();
         WriteLine("Resuming transfer...");
-        await TransferManager.UploadAsync(localFilePath, blob, null, contextResume);
+        await TransferManager.UploadAsync(localFilePath, blob, null, contextResume, cancellationToken);
       }
 
       stopWatch.Stop();
-      WriteLine();
-      WriteLine($"Transfer operation completed in {string.Format("HH:mm:ss", stopWatch.Elapsed)}");
+      WriteLine($"Transfer operation completed in {stopWatch.Elapsed}");
     }
 
     static readonly object _consoleLockObj = new object();
@@ -195,7 +180,7 @@ namespace AzCp
       {
         ProgressHandler = new Progress<TransferStatus>((progress) =>
         {
-          WriteProgress($"Bytes transferred: {NumberFormatter.SizeSuffix(progress.BytesTransferred, 0)}");
+          WriteProgress($"Bytes transferred: {NumberFormatter.SizeSuffix(progress.BytesTransferred, 0)} ({progress.BytesTransferred:N0})");
         })
       };
     }
@@ -210,7 +195,6 @@ namespace AzCp
       await container.CreateIfNotExistsAsync();
 
       CloudBlockBlob blob = container.GetBlockBlobReference(_repo.BlobName);
-
       WriteLine("Created BLOB Container");
 
       return blob;
