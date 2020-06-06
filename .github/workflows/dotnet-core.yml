@@ -1,0 +1,33 @@
+name: .NET Core
+
+on:
+  push:
+    branches: [ master ]
+  pull_request:
+    branches: [ master ]
+
+jobs:
+  build:
+
+    # Has to run on Windows in order to do performance optimisation
+    runs-on: windows-latest
+
+    steps:
+    - uses: actions/checkout@v2
+    - name: Setup .NET Core
+      uses: actions/setup-dotnet@v1
+      with:
+        dotnet-version: 3.1.101
+    - name: Install dependencies
+      run: dotnet restore
+#     - name: Build
+#       run: dotnet build --configuration Release --no-restore
+    - name: publish
+      run: dotnet publish /p:DeployOnBuild=true /p:PublishProfile=FolderProfile
+    - name: Test
+      run: dotnet test --no-restore --verbosity normal
+    - name: Upload Artifact
+      uses: actions/upload-artifact@v1.0.0
+      with:
+        name: azcp
+        path: bin\Release\netcoreapp3.1\Publish
