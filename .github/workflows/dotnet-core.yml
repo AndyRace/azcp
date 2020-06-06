@@ -9,7 +9,8 @@ on:
 jobs:
   build:
 
-    runs-on: ubuntu-latest
+    # Has to run on Windows in order to do performance optimisation
+    runs-on: windows-latest
 
     steps:
     - uses: actions/checkout@v2
