@@ -348,7 +348,10 @@ MigrationBackup/
 
 # Ionide (cross platform F# VS Code tools) working folder
 .ionide/
+
 /test-files
 /package-lock.json
 /Properties/launchSettings.json
 /Properties/serviceDependencies.local.json
+*.exe
+/test/get-secrets.cmd
