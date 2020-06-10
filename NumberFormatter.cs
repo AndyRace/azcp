@@ -4,16 +4,15 @@ namespace AzCp
 {
   class NumberFormatter
   {
-    private static readonly string[] SizeSuffixes =
-                  { "bytes", "KB", "MB", "GB", "TB", "PB", "EB", "ZB", "YB" };
+    private static readonly string[] SizeSuffixes = { "bytes", "KB", "MB", "GB", "TB", "PB", "EB", "ZB", "YB" };
 
-    public static string SizeSuffix(Int64 value, int decimalPlaces = 1)
+    public static string SizeSuffix(long value, int decimalPlaces = 0)
     {
       if (value < 0) { return "-" + SizeSuffix(-value); }
 
       int i = 0;
-      decimal dValue = (decimal)value;
-      while (Math.Round(dValue, decimalPlaces) >= 1000)
+      decimal dValue = value;
+      while (Math.Round(dValue, decimalPlaces) >= 1024)
       {
         dValue /= 1024;
         i++;
