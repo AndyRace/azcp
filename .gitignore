@@ -361,3 +361,4 @@ MigrationBackup/
 /.vscode
 /test/test.ps1
 /test/test.cmd
+/test/archive

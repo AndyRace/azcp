@@ -166,9 +166,41 @@ Transfer Configuration
       DirectoryTransferContext result;
       result = new DirectoryTransferContext(checkpoint);
 
+      static string ToSourceDestination(TransferEventArgs e)
+      {
+        var result = $"'{e.Source}' => '{((CloudBlockBlob)e.Destination).Name}'";
+        if (e.Exception != null)
+        {
+          result += $" ({e.Exception.Message})";
+        }
+        return result;
+      }
+
+      void ArchiveFile(TransferEventArgs e)
+      {
+        var relPath = Path.GetRelativePath(_repo.UploadFolder, (string)e.Source);
+        var archivePath = Path.Combine(_repo.ArchiveFolder, relPath);
+        Directory.CreateDirectory(Path.GetDirectoryName(archivePath));
+        File.Move((string)e.Source, archivePath, true);
+      }
+
+      result.FileFailed += (sender, e) => {
+        _feedback.WriteLine($"FAILED: {ToSourceDestination(e)}", null, IFeedback.Colors.ErrorForegroundColor);
+      };
+      result.FileSkipped += (sender, e) => {
+        _feedback.WriteLine($"Skipped: {ToSourceDestination(e)}");
+        ArchiveFile(e);
+      };
+      result.FileTransferred += (sender, e) => {
+        _feedback.WriteLine($"Transferred: {ToSourceDestination(e)}");
+        ArchiveFile(e);
+      };
+
+      // todo: result.ShouldTransferCallbackAsync
+
       result.ProgressHandler = new Progress<TransferStatus>((progress) =>
         {
-          _feedback.WriteProgress(ToUserString(progress));
+          _feedback.WriteProgress(ToUserString(progress), null, progress.NumberOfFilesFailed == 0 ? IFeedback.Colors.OkForegroundColor : IFeedback.Colors.WarningForegroundColor);
 
           AzCpCheckpoint.Write(_repo.TransferCheckpointFilename, result.LastCheckpoint);
         });
