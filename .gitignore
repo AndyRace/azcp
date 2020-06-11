@@ -357,3 +357,5 @@ MigrationBackup/
 /test/get-secrets.cmd
 /test/upload/*.bin
 /test/archive/*.bin
+/test/.azcp/transferCheckpoint.json
+/.vscode

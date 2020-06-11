@@ -22,8 +22,10 @@ jobs:
       run: dotnet restore
 #     - name: Build
 #       run: dotnet build --configuration Release --no-restore
+#    - name: publish
+#      run: dotnet publish /p:DeployOnBuild=true /p:PublishProfile=FolderProfile
     - name: publish
-      run: dotnet publish /p:DeployOnBuild=true /p:PublishProfile=FolderProfile
+      run: pwsh -command ".\$GITHUB_WORKSPACE\publish.ps1"
     - name: Test
       run: dotnet test --no-restore --verbosity normal
     - name: Upload Artifact
