@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Threading.Tasks;
+using AzCp.Interfaces;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -21,6 +22,12 @@ namespace AzCp
       {
         return 1;
       }
+#pragma warning disable CA1031 // Do not catch general exception types
+      catch
+      {
+        return 2;
+      }
+#pragma warning restore CA1031 // Do not catch general exception types
     }
 
     public static IHostBuilder CreateHostBuilder(string[] args) =>
@@ -31,6 +38,7 @@ namespace AzCp
           })
           .ConfigureServices((hostContext, services) =>
           {
+            services.AddSingleton<IFeedback>(new ConsoleFeedback());
             services.AddHostedService<Application>();
           });
   }

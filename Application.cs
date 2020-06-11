@@ -15,11 +15,13 @@ namespace AzCp
   class Application : IHostedService
   {
     private readonly IConfiguration _configuration;
+    private readonly IFeedback _feedback;
     private readonly Repository _repo;
 
-    public Application(IConfiguration configuration)
+    public Application(IConfiguration configuration, IFeedback feedback)
     {
       _configuration = configuration;
+      _feedback = feedback;
       _repo = _configuration.GetSection("Repository").Get<Repository>();
     }
 
@@ -58,7 +60,7 @@ namespace AzCp
       var product = entryAssembly.GetCustomAttribute<AssemblyProductAttribute>().Product;
       var description = entryAssembly.GetCustomAttribute<AssemblyDescriptionAttribute>().Description;
 
-      WriteLine($@"{product} {informationalVersion} ({assemblyFileVersion})
+      _feedback.WriteLine($@"{product} {informationalVersion} ({assemblyFileVersion})
 {description}
 
 Upload Folder:         {_repo.UploadFolder}
@@ -88,7 +90,7 @@ Transfer Configuration
         var transferCheckpoint = AzCpCheckpoint.Read(_repo.TransferCheckpointFilename).TransferCheckpoint;
         if (transferCheckpoint != null)
         {
-          WriteLine("Resuming upload...");
+          _feedback.WriteLine("Resuming upload...");
         }
 
         while (true)
@@ -115,7 +117,7 @@ Transfer Configuration
           //  }
           //}
 
-          WriteProgress("Establishing connection...");
+          _feedback.WriteProgress("Establishing connection...");
 
           Stopwatch stopWatch = Stopwatch.StartNew();
           var transferStatus = await TransferManager.UploadDirectoryAsync(_repo.UploadFolder, blobDirectory, options, context, linkedCts.Token);
@@ -138,13 +140,13 @@ Transfer Configuration
           }
 #pragma warning restore CA1031 // Do not catch general exception types
 
-          WriteLine($"{stopWatch.Elapsed}: {ToUserString(transferStatus)}");
+          _feedback.WriteLine($"{stopWatch.Elapsed}: {ToUserString(transferStatus)}");
 
           // wait until there are new files to upload
           // NOTE: Will also be triggered if files are renamed or deleted
           while (new DirectoryInfo(_repo.UploadFolder).LastWriteTimeUtc == uploadFolderLastWriteTime)
           {
-            WriteProgress("Waiting for new files to upload...");
+            _feedback.WriteProgress("Waiting for new files to upload...");
             if (linkedCts.Token.WaitHandle.WaitOne(TimeSpan.FromSeconds(2)))
             {
               linkedCts.Token.ThrowIfCancellationRequested();
@@ -154,73 +156,7 @@ Transfer Configuration
       }
       catch (TaskCanceledException e)
       {
-        WriteLine("The transfer was cancelled: {0}", e.Message);
-      }
-    }
-
-    static readonly object _consoleLockObj = new object();
-
-    static int _prevProgressLen = 0;
-    private static void WriteProgress(string format = "", object arg0 = null)
-    {
-      Write(format, arg0, ConsoleColor.Yellow, true);
-    }
-    private static void WriteLine(string format = "", object arg0 = null)
-    {
-      Write(format, arg0, ConsoleColor.Green, false);
-    }
-
-    private static void Write(string format, object arg0, ConsoleColor fgColor, bool progressLine)
-    {
-      lock (_consoleLockObj)
-      {
-        static void ClearProgressLine()
-        {
-          if (_prevProgressLen != 0)
-          {
-            Console.Write($"{new string(' ', _prevProgressLen)}\r");
-            _prevProgressLen = 0;
-          }
-        }
-
-        var msg = string.Format(format, arg0);
-        if (string.IsNullOrEmpty(msg))
-        {
-          ClearProgressLine();
-          if (!progressLine)
-          {
-            Console.WriteLine();
-          }
-        }
-        else
-        {
-          msg = $"{DateTime.Now}: {msg}";
-
-          var bg = Console.BackgroundColor;
-          var fg = Console.ForegroundColor;
-          try
-          {
-            Console.BackgroundColor = ConsoleColor.Black;
-            Console.ForegroundColor = fgColor;
-
-            // clear any previous 'progress' line
-            if (progressLine)
-            {
-              Console.Write($"{msg.PadRight(_prevProgressLen, ' ')}\r");
-              _prevProgressLen = msg.Length;
-            }
-            else
-            {
-              ClearProgressLine();
-              Console.WriteLine(msg);
-            }
-          }
-          finally
-          {
-            Console.BackgroundColor = bg;
-            Console.ForegroundColor = fg;
-          }
-        }
+        _feedback.WriteLine("The transfer was cancelled: {0}", e.Message);
       }
     }
 
@@ -231,7 +167,7 @@ Transfer Configuration
 
       result.ProgressHandler = new Progress<TransferStatus>((progress) =>
         {
-          WriteProgress(ToUserString(progress));
+          _feedback.WriteProgress(ToUserString(progress));
 
           AzCpCheckpoint.Write(_repo.TransferCheckpointFilename, result.LastCheckpoint);
         });
