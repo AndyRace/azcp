@@ -25,7 +25,6 @@ jobs:
 #    - name: publish
 #      run: dotnet publish /p:DeployOnBuild=true /p:PublishProfile=FolderProfile
     - name: publish
-      if: github.event.action == 'script'
       run: pwsh -command ".\$GITHUB_WORKSPACE\publish.ps1"
     - name: Test
       run: dotnet test --no-restore --verbosity normal
