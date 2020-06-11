@@ -33,10 +33,6 @@ namespace AzCp
 
     public async Task StartAsync(CancellationToken cancellationToken)
     {
-      // CloudStorageAccount account = CloudStorageAccount.Parse(storageConnectionString);
-      var connectionString = _configuration.GetConnectionString("StorageConnectionString");
-      CloudStorageAccount account = CloudStorageAccount.Parse(connectionString);
-
       if (_repo.ParallelOperations.HasValue)
       {
         TransferManager.Configurations.ParallelOperations = (int)_repo.ParallelOperations;
@@ -46,13 +42,6 @@ namespace AzCp
       {
         TransferManager.Configurations.BlockSize = (int)_repo.BlockSize;
       }
-
-      await TransferLocalDirectoryToAzureBlob(account, cancellationToken);
-    }
-
-    public async Task TransferLocalDirectoryToAzureBlob(CloudStorageAccount account, CancellationToken cancellationToken)
-    {
-      var blobDirectory = GetBlobDirectory(account, _repo.ContainerName);
 
       // Display the config info
       var entryAssembly = Assembly.GetEntryAssembly();
@@ -72,8 +61,16 @@ Transfer Configuration
   Parallel Operations: {TransferManager.Configurations.ParallelOperations}
   Recursive:           {_repo.Recursive}
 ");
-      //WriteLine("Press 'c' to temporarily cancel your transfer...");
-      //WriteLine();
+
+      var connectionString = _configuration.GetConnectionString("StorageConnectionString");
+      CloudStorageAccount account = CloudStorageAccount.Parse(connectionString);
+
+      await TransferLocalDirectoryToAzureBlob(account, cancellationToken);
+    }
+
+    public async Task TransferLocalDirectoryToAzureBlob(CloudStorageAccount account, CancellationToken cancellationToken)
+    {
+      var blobDirectory = GetBlobDirectory(account, _repo.ContainerName);
 
       UploadDirectoryOptions options = new UploadDirectoryOptions()
       {
