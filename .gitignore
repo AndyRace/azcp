@@ -359,3 +359,5 @@ MigrationBackup/
 /test/archive/*.bin
 /test/.azcp/transferCheckpoint.json
 /.vscode
+/test/test.ps1
+/test/test.cmd
