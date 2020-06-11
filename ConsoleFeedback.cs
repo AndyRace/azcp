@@ -9,16 +9,16 @@ namespace AzCp
 
     private int _prevProgressLen = 0;
 
-    public void WriteProgress(string format = "", object arg0 = null)
+    public void WriteProgress(string format = "", object arg0 = null, IFeedback.Colors color = IFeedback.Colors.ProgressForegroundColor)
     {
-      Write(format, arg0, ConsoleColor.Yellow, true);
+      Write(format, arg0, color, true);
     }
-    public void WriteLine(string format = "", object arg0 = null)
+    public void WriteLine(string format = "", object arg0 = null, IFeedback.Colors color = IFeedback.Colors.OkForegroundColor)
     {
-      Write(format, arg0, ConsoleColor.Green, false);
+      Write(format, arg0, color, false);
     }
 
-    private void Write(string format, object arg0, ConsoleColor fgColor, bool progressLine)
+    private void Write(string format, object arg0, IFeedback.Colors fgColor, bool progressLine)
     {
       lock (_consoleLockObj)
       {
@@ -49,7 +49,7 @@ namespace AzCp
           try
           {
             Console.BackgroundColor = ConsoleColor.Black;
-            Console.ForegroundColor = fgColor;
+            Console.ForegroundColor = (ConsoleColor)fgColor;
 
             // clear any previous 'progress' line
             if (progressLine)

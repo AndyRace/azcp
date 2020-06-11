@@ -3,14 +3,14 @@
 pushd %~dp0
 
 set getSecretsCmd=get-secrets.cmd
-if not exist %getSecretsCmd% goto :noSecrets
-call get-secrets
+if exist %getSecretsCmd% call get-secrets
 
-set publishedExe=..\bin\Release\netcoreapp3.1\publish\AzCp.exe
-if exist %publishedExe% copy %publishedExe% . /y >nul
+if not defined AzCp_ConnectionStrings__StorageConnectionString goto :noSecrets
+
 if not exist AzCp.exe goto :noExe
-
 if not exist upload goto :noUpload
+if not exist archive md archive
+if not exist .azcp md .azcp
 
 AzCp
 

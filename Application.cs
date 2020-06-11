@@ -18,6 +18,7 @@ namespace AzCp
     private readonly IConfiguration _configuration;
     private readonly IFeedback _feedback;
     private readonly Repository _repo;
+    private long _changesInUploadFolder;
 
     public Application(IConfiguration configuration, IFeedback feedback)
     {
@@ -33,10 +34,6 @@ namespace AzCp
 
     public async Task StartAsync(CancellationToken cancellationToken)
     {
-      // CloudStorageAccount account = CloudStorageAccount.Parse(storageConnectionString);
-      var connectionString = _configuration.GetConnectionString("StorageConnectionString");
-      CloudStorageAccount account = CloudStorageAccount.Parse(connectionString);
-
       if (_repo.ParallelOperations.HasValue)
       {
         TransferManager.Configurations.ParallelOperations = (int)_repo.ParallelOperations;
@@ -46,13 +43,6 @@ namespace AzCp
       {
         TransferManager.Configurations.BlockSize = (int)_repo.BlockSize;
       }
-
-      await TransferLocalDirectoryToAzureBlob(account, cancellationToken);
-    }
-
-    public async Task TransferLocalDirectoryToAzureBlob(CloudStorageAccount account, CancellationToken cancellationToken)
-    {
-      var blobDirectory = GetBlobDirectory(account, _repo.ContainerName);
 
       // Display the config info
       var entryAssembly = Assembly.GetEntryAssembly();
@@ -72,8 +62,17 @@ Transfer Configuration
   Parallel Operations: {TransferManager.Configurations.ParallelOperations}
   Recursive:           {_repo.Recursive}
 ");
-      //WriteLine("Press 'c' to temporarily cancel your transfer...");
-      //WriteLine();
+
+      var connectionString = _configuration.GetConnectionString("StorageConnectionString");
+      CloudStorageAccount account = CloudStorageAccount.Parse(connectionString);
+
+      await TransferLocalDirectoryToAzureBlob(account, cancellationToken);
+    }
+
+
+    public async Task TransferLocalDirectoryToAzureBlob(CloudStorageAccount account, CancellationToken cancellationToken)
+    {
+      var blobDirectory = GetBlobDirectory(account, _repo.ContainerName);
 
       UploadDirectoryOptions options = new UploadDirectoryOptions()
       {
@@ -81,11 +80,12 @@ Transfer Configuration
         //SearchPattern = 
       };
 
-      //var context = GetDirectoryTransferContext(null);
-
       var internalTokenSource = new CancellationTokenSource();
-      using CancellationTokenSource linkedCts =
+      using var linkedCts =
              CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, internalTokenSource.Token);
+
+      using var watcher = CreateFileSystemWatcher();
+
       try
       {
         var transferCheckpoint = AzCpCheckpoint.Read(_repo.TransferCheckpointFilename).TransferCheckpoint;
@@ -98,8 +98,6 @@ Transfer Configuration
         {
           var context = GetDirectoryTransferContext(transferCheckpoint);
           transferCheckpoint = null;
-
-          var uploadFolderLastWriteTime = new DirectoryInfo(_repo.UploadFolder).LastWriteTimeUtc;
 
           //var task = TransferManager.UploadDirectoryAsync(_repo.UploadFolder, blobDirectory, options, context, linkedCts.Token);
           //while (!task.IsCompleted)
@@ -119,6 +117,8 @@ Transfer Configuration
           //}
 
           _feedback.WriteProgress("Establishing connection...");
+
+          Interlocked.Exchange(ref _changesInUploadFolder, 0);
 
           Stopwatch stopWatch = Stopwatch.StartNew();
           var transferStatus = await TransferManager.UploadDirectoryAsync(_repo.UploadFolder, blobDirectory, options, context, linkedCts.Token);
@@ -145,10 +145,11 @@ Transfer Configuration
 
           // wait until there are new files to upload
           // NOTE: Will also be triggered if files are renamed or deleted
-          while (new DirectoryInfo(_repo.UploadFolder).LastWriteTimeUtc == uploadFolderLastWriteTime)
+          while (Interlocked.Read(ref _changesInUploadFolder) == 0)
           {
             _feedback.WriteProgress("Waiting for new files to upload...");
-            if (linkedCts.Token.WaitHandle.WaitOne(TimeSpan.FromSeconds(2)))
+            
+            if (linkedCts.Token.WaitHandle.WaitOne(TimeSpan.FromMilliseconds(1500 - DateTime.UtcNow.Millisecond)))
             {
               linkedCts.Token.ThrowIfCancellationRequested();
             }
@@ -161,14 +162,85 @@ Transfer Configuration
       }
     }
 
+    private FileSystemWatcher CreateFileSystemWatcher()
+    {
+      var watcher = new FileSystemWatcher
+      {
+        Path = _repo.UploadFolder,
+
+        // Watch for changes in LastWrite times, and the renaming of files or directories.
+        NotifyFilter = // NotifyFilters.LastAccess
+                           NotifyFilters.LastWrite
+                           | NotifyFilters.FileName
+                           | NotifyFilters.DirectoryName,
+
+        IncludeSubdirectories = true
+      };
+
+      //watcher.Filter = "*.txt";
+
+      // Add event handlers.
+      watcher.Changed += OnChanged;
+      watcher.Created += OnChanged;
+      //watcher.Deleted += OnChanged;
+      watcher.Renamed += OnRenamed;
+
+      // Begin watching.
+      watcher.EnableRaisingEvents = true;
+
+      return watcher;
+    }
+
+    private void OnRenamed(object sender, RenamedEventArgs e)
+    {
+      Interlocked.Increment(ref _changesInUploadFolder);
+    }
+
+    private void OnChanged(object sender, FileSystemEventArgs e)
+    {
+      Interlocked.Increment(ref _changesInUploadFolder);
+    }
+
     public DirectoryTransferContext GetDirectoryTransferContext(TransferCheckpoint checkpoint)
     {
       DirectoryTransferContext result;
       result = new DirectoryTransferContext(checkpoint);
 
+      static string ToSourceDestination(TransferEventArgs e)
+      {
+        var result = $"'{e.Source}' => '{((CloudBlockBlob)e.Destination).Name}'";
+        if (e.Exception != null)
+        {
+          result += $" ({e.Exception.Message})";
+        }
+        return result;
+      }
+
+      void ArchiveFile(TransferEventArgs e)
+      {
+        var relPath = Path.GetRelativePath(_repo.UploadFolder, (string)e.Source);
+        var archivePath = Path.Combine(_repo.ArchiveFolder, relPath);
+        Directory.CreateDirectory(Path.GetDirectoryName(archivePath));
+        File.Move((string)e.Source, archivePath, true);
+      }
+
+      result.FileFailed += (sender, e) => {
+        _feedback.WriteLine($"FAILED: {ToSourceDestination(e)}", null, IFeedback.Colors.ErrorForegroundColor);
+      };
+      result.FileSkipped += (sender, e) => {
+        _feedback.WriteLine($"Skipped: {ToSourceDestination(e)}");
+        ArchiveFile(e);
+      };
+      result.FileTransferred += (sender, e) => {
+        _feedback.WriteLine($"Transferred: {ToSourceDestination(e)}");
+        ArchiveFile(e);
+      };
+
+      // todo: result.ShouldTransferCallbackAsync
+
       result.ProgressHandler = new Progress<TransferStatus>((progress) =>
         {
-          _feedback.WriteProgress(ToUserString(progress));
+          _feedback.WriteProgress(ToUserString(progress), null, progress.NumberOfFilesFailed == 0 ? IFeedback.Colors.OkForegroundColor : IFeedback.Colors.WarningForegroundColor);
 
           AzCpCheckpoint.Write(_repo.TransferCheckpointFilename, result.LastCheckpoint);
         });
