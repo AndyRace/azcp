@@ -18,6 +18,7 @@ namespace AzCp
     private readonly IConfiguration _configuration;
     private readonly IFeedback _feedback;
     private readonly Repository _repo;
+    private long _changesInUploadFolder;
 
     public Application(IConfiguration configuration, IFeedback feedback)
     {
@@ -68,6 +69,7 @@ Transfer Configuration
       await TransferLocalDirectoryToAzureBlob(account, cancellationToken);
     }
 
+
     public async Task TransferLocalDirectoryToAzureBlob(CloudStorageAccount account, CancellationToken cancellationToken)
     {
       var blobDirectory = GetBlobDirectory(account, _repo.ContainerName);
@@ -78,11 +80,12 @@ Transfer Configuration
         //SearchPattern = 
       };
 
-      //var context = GetDirectoryTransferContext(null);
-
       var internalTokenSource = new CancellationTokenSource();
-      using CancellationTokenSource linkedCts =
+      using var linkedCts =
              CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, internalTokenSource.Token);
+
+      using var watcher = CreateFileSystemWatcher();
+
       try
       {
         var transferCheckpoint = AzCpCheckpoint.Read(_repo.TransferCheckpointFilename).TransferCheckpoint;
@@ -95,8 +98,6 @@ Transfer Configuration
         {
           var context = GetDirectoryTransferContext(transferCheckpoint);
           transferCheckpoint = null;
-
-          var uploadFolderLastWriteTime = new DirectoryInfo(_repo.UploadFolder).LastWriteTimeUtc;
 
           //var task = TransferManager.UploadDirectoryAsync(_repo.UploadFolder, blobDirectory, options, context, linkedCts.Token);
           //while (!task.IsCompleted)
@@ -116,6 +117,8 @@ Transfer Configuration
           //}
 
           _feedback.WriteProgress("Establishing connection...");
+
+          Interlocked.Exchange(ref _changesInUploadFolder, 0);
 
           Stopwatch stopWatch = Stopwatch.StartNew();
           var transferStatus = await TransferManager.UploadDirectoryAsync(_repo.UploadFolder, blobDirectory, options, context, linkedCts.Token);
@@ -142,10 +145,11 @@ Transfer Configuration
 
           // wait until there are new files to upload
           // NOTE: Will also be triggered if files are renamed or deleted
-          while (new DirectoryInfo(_repo.UploadFolder).LastWriteTimeUtc == uploadFolderLastWriteTime)
+          while (Interlocked.Read(ref _changesInUploadFolder) == 0)
           {
             _feedback.WriteProgress("Waiting for new files to upload...");
-            if (linkedCts.Token.WaitHandle.WaitOne(TimeSpan.FromSeconds(2)))
+            
+            if (linkedCts.Token.WaitHandle.WaitOne(TimeSpan.FromMilliseconds(1500 - DateTime.UtcNow.Millisecond)))
             {
               linkedCts.Token.ThrowIfCancellationRequested();
             }
@@ -156,6 +160,45 @@ Transfer Configuration
       {
         _feedback.WriteLine("The transfer was cancelled: {0}", e.Message);
       }
+    }
+
+    private FileSystemWatcher CreateFileSystemWatcher()
+    {
+      var watcher = new FileSystemWatcher
+      {
+        Path = _repo.UploadFolder,
+
+        // Watch for changes in LastWrite times, and the renaming of files or directories.
+        NotifyFilter = // NotifyFilters.LastAccess
+                           NotifyFilters.LastWrite
+                           | NotifyFilters.FileName
+                           | NotifyFilters.DirectoryName,
+
+        IncludeSubdirectories = true
+      };
+
+      //watcher.Filter = "*.txt";
+
+      // Add event handlers.
+      watcher.Changed += OnChanged;
+      watcher.Created += OnChanged;
+      //watcher.Deleted += OnChanged;
+      watcher.Renamed += OnRenamed;
+
+      // Begin watching.
+      watcher.EnableRaisingEvents = true;
+
+      return watcher;
+    }
+
+    private void OnRenamed(object sender, RenamedEventArgs e)
+    {
+      Interlocked.Increment(ref _changesInUploadFolder);
+    }
+
+    private void OnChanged(object sender, FileSystemEventArgs e)
+    {
+      Interlocked.Increment(ref _changesInUploadFolder);
     }
 
     public DirectoryTransferContext GetDirectoryTransferContext(TransferCheckpoint checkpoint)
