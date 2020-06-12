@@ -10,6 +10,7 @@ using System.IO;
 using System.Reflection;
 using System.Threading;
 using System.Threading.Tasks;
+using Serilog;
 
 namespace AzCp
 {
@@ -17,14 +18,21 @@ namespace AzCp
   {
     private readonly IConfiguration _configuration;
     private readonly IFeedback _feedback;
+    private readonly ILogger _logger;
     private readonly Repository _repo;
     private long _changesInUploadFolder;
 
-    public Application(IConfiguration configuration, IFeedback feedback)
+    public Application(IConfiguration configuration, IFeedback feedback, ILogger logger)
     {
       _configuration = configuration;
       _feedback = feedback;
+      _logger = logger;
       _repo = _configuration.GetSection("Repository").Get<Repository>();
+
+      if(_repo == null)
+      {
+        throw new Exception("Unable to find the 'Repository' section in the application settings!");
+      }
     }
 
     public Task StopAsync(CancellationToken cancellationToken)
@@ -51,7 +59,7 @@ namespace AzCp
       var product = entryAssembly.GetCustomAttribute<AssemblyProductAttribute>().Product;
       var description = entryAssembly.GetCustomAttribute<AssemblyDescriptionAttribute>().Description;
 
-      _feedback.WriteLine($@"{product} {informationalVersion} ({assemblyFileVersion})
+      _logger.Information($@"{product} {informationalVersion} ({assemblyFileVersion})
 {description}
 
 Upload Folder:         {_repo.UploadFolder}
@@ -64,6 +72,11 @@ Transfer Configuration
 ");
 
       var connectionString = _configuration.GetConnectionString("StorageConnectionString");
+      if (connectionString == null)
+      {
+        throw new Exception("Unable to find 'StorageConnectionString' details!");
+      }
+
       CloudStorageAccount account = CloudStorageAccount.Parse(connectionString);
 
       await TransferLocalDirectoryToAzureBlob(account, cancellationToken);
@@ -91,7 +104,7 @@ Transfer Configuration
         var transferCheckpoint = AzCpCheckpoint.Read(_repo.TransferCheckpointFilename).TransferCheckpoint;
         if (transferCheckpoint != null)
         {
-          _feedback.WriteLine("Resuming upload...");
+          _logger.Information("Resuming upload...");
         }
 
         while (true)
@@ -141,7 +154,7 @@ Transfer Configuration
           }
 #pragma warning restore CA1031 // Do not catch general exception types
 
-          _feedback.WriteLine($"{stopWatch.Elapsed}: {ToUserString(transferStatus)}");
+          _logger.Information($"{stopWatch.Elapsed}: {ToUserString(transferStatus)}");
 
           // wait until there are new files to upload
           // NOTE: Will also be triggered if files are renamed or deleted
@@ -156,10 +169,18 @@ Transfer Configuration
           }
         }
       }
-      catch (TaskCanceledException e)
+      catch (Exception ex) when (ex is TaskCanceledException || ex is OperationCanceledException)
       {
-        _feedback.WriteLine("The transfer was cancelled: {0}", e.Message);
+        _logger.Information($"The transfer was cancelled");
+        throw;
       }
+#pragma warning disable CA1031 // Do not catch general exception types
+      catch (Exception ex)
+      {
+        _logger.Error(ex, $"UNEXPECTED ERROR: {ex.Message}");
+        throw;
+      }
+#pragma warning restore CA1031 // Do not catch general exception types
     }
 
     private FileSystemWatcher CreateFileSystemWatcher()
@@ -225,14 +246,14 @@ Transfer Configuration
       }
 
       result.FileFailed += (sender, e) => {
-        _feedback.WriteLine($"FAILED: {ToSourceDestination(e)}", null, IFeedback.Colors.ErrorForegroundColor);
+        _logger.Information($"FAILED: {ToSourceDestination(e)}", null, IFeedback.Colors.ErrorForegroundColor);
       };
       result.FileSkipped += (sender, e) => {
-        _feedback.WriteLine($"Skipped: {ToSourceDestination(e)}");
+        _logger.Information($"Skipped: {ToSourceDestination(e)}");
         ArchiveFile(e);
       };
       result.FileTransferred += (sender, e) => {
-        _feedback.WriteLine($"Transferred: {ToSourceDestination(e)}");
+        _logger.Information($"Transferred: {ToSourceDestination(e)}");
         ArchiveFile(e);
       };
 
@@ -240,7 +261,7 @@ Transfer Configuration
 
       result.ProgressHandler = new Progress<TransferStatus>((progress) =>
         {
-          _feedback.WriteProgress(ToUserString(progress), null, progress.NumberOfFilesFailed == 0 ? IFeedback.Colors.OkForegroundColor : IFeedback.Colors.WarningForegroundColor);
+          _feedback.WriteProgress(ToUserString(progress), progress.NumberOfFilesFailed == 0 ? IFeedback.Colors.OkForegroundColor : IFeedback.Colors.WarningForegroundColor);
 
           AzCpCheckpoint.Write(_repo.TransferCheckpointFilename, result.LastCheckpoint);
         });

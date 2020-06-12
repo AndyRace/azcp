@@ -4,15 +4,15 @@ namespace AzCp.Interfaces
 {
   public interface IFeedback
   {
-    enum Colors
+    public enum Colors
     {
-      OkForegroundColor = ConsoleColor.Green,
-      WarningForegroundColor = ConsoleColor.Magenta,
-      ErrorForegroundColor = ConsoleColor.Red,
-      ProgressForegroundColor = ConsoleColor.Yellow,
+      OkForegroundColor,
+      WarningForegroundColor,
+      ErrorForegroundColor,
+      ProgressForegroundColor
     }
 
-    void WriteLine(string format = "", object arg0 = null, Colors color = Colors.OkForegroundColor);
-    void WriteProgress(string format = "", object arg0 = null, Colors color = Colors.ProgressForegroundColor);
+    void WriteLine(string line = "", Colors color = Colors.OkForegroundColor);
+    void WriteProgress(string line = "", Colors color = Colors.ProgressForegroundColor);
   }
 }

@@ -4,6 +4,8 @@ using AzCp.Interfaces;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using Serilog;
+using Serilog.Events;
 
 namespace AzCp
 {
@@ -13,9 +15,19 @@ namespace AzCp
 
     public static async Task<int> Main(string[] args)
     {
+      // todo: Intercept Console.WriteLine to ensure it plays nicely with ConsoleFeedback
+      Log.Logger = new LoggerConfiguration()
+            .MinimumLevel.Debug()
+            .MinimumLevel.Override("Microsoft", LogEventLevel.Information)
+            .Enrich.FromLogContext()
+            .WriteTo.Console()
+            .CreateLogger();
       try
       {
-        await CreateHostBuilder(args).RunConsoleAsync();
+        await CreateHostBuilder(args)
+          .UseSerilog()
+          .RunConsoleAsync();
+
         return 0;
       }
       catch (Exception ex) when (ex is TaskCanceledException || ex is OperationCanceledException)
@@ -23,11 +35,16 @@ namespace AzCp
         return 1;
       }
 #pragma warning disable CA1031 // Do not catch general exception types
-      catch
+      catch (Exception)
       {
         return 2;
       }
 #pragma warning restore CA1031 // Do not catch general exception types
+      finally
+      {
+        Console.Out.Flush();
+        Log.CloseAndFlush();
+      }
     }
 
     public static IHostBuilder CreateHostBuilder(string[] args) =>
@@ -38,7 +55,8 @@ namespace AzCp
           })
           .ConfigureServices((hostContext, services) =>
           {
-            services.AddSingleton<IFeedback>(new ConsoleFeedback());
+            services.AddSingleton(Log.Logger);
+            services.AddTransient(typeof(IFeedback), typeof(ConsoleFeedback));
             services.AddHostedService<Application>();
           });
   }

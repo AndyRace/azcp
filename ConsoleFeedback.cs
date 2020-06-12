@@ -1,24 +1,37 @@
 ﻿using AzCp.Interfaces;
+using Microsoft.Extensions.Logging;
 using System;
+using System.Collections.Generic;
 
 namespace AzCp
 {
   internal class ConsoleFeedback : IFeedback
   {
     private readonly object _consoleLockObj = new object();
-
     private int _prevProgressLen = 0;
 
-    public void WriteProgress(string format = "", object arg0 = null, IFeedback.Colors color = IFeedback.Colors.ProgressForegroundColor)
+    private static readonly Dictionary<IFeedback.Colors, ConsoleColor> _colorMapping = new Dictionary<IFeedback.Colors, ConsoleColor>  {
+        { IFeedback.Colors.ErrorForegroundColor, ConsoleColor.Red },
+        { IFeedback.Colors.OkForegroundColor, ConsoleColor.Green },
+        { IFeedback.Colors.ProgressForegroundColor, ConsoleColor.Yellow },
+        { IFeedback.Colors.WarningForegroundColor, ConsoleColor.Magenta }
+      };
+
+    public ConsoleFeedback()
     {
-      Write(format, arg0, color, true);
-    }
-    public void WriteLine(string format = "", object arg0 = null, IFeedback.Colors color = IFeedback.Colors.OkForegroundColor)
-    {
-      Write(format, arg0, color, false);
     }
 
-    private void Write(string format, object arg0, IFeedback.Colors fgColor, bool progressLine)
+    public void WriteProgress(string msg, IFeedback.Colors color)
+    {
+      Write(msg, color, true);
+    }
+
+    public void WriteLine(string msg, IFeedback.Colors color)
+    {
+      Write(msg, color, false);
+    }
+
+    private void Write(string msg, IFeedback.Colors fgColor, bool progressLine)
     {
       lock (_consoleLockObj)
       {
@@ -31,7 +44,6 @@ namespace AzCp
           }
         }
 
-        var msg = string.Format(format, arg0);
         if (string.IsNullOrEmpty(msg))
         {
           ClearProgressLine();
@@ -49,7 +61,7 @@ namespace AzCp
           try
           {
             Console.BackgroundColor = ConsoleColor.Black;
-            Console.ForegroundColor = (ConsoleColor)fgColor;
+            Console.ForegroundColor = _colorMapping[fgColor];
 
             // clear any previous 'progress' line
             if (progressLine)
