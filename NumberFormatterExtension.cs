@@ -2,13 +2,18 @@
 
 namespace AzCp
 {
-  class NumberFormatter
+  public static class NumberFormatterExtension
   {
     private static readonly string[] SizeSuffixes = { "bytes", "KB", "MB", "GB", "TB", "PB", "EB", "ZB", "YB" };
 
-    public static string SizeSuffix(long value, int decimalPlaces = 0)
+    public static string ToSizeSuffix(this int value, int decimalPlaces = 0)
     {
-      if (value < 0) { return "-" + SizeSuffix(-value); }
+      return ((long)value).ToSizeSuffix(decimalPlaces);
+    }
+
+    public static string ToSizeSuffix(this long value, int decimalPlaces = 0)
+    {
+      if (value < 0) { return "-" + ToSizeSuffix(-value, decimalPlaces); }
 
       int i = 0;
       decimal dValue = value;

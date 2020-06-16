@@ -11,6 +11,8 @@ using System.Reflection;
 using System.Threading;
 using System.Threading.Tasks;
 using Serilog;
+using System.Net;
+using System.Collections.Generic;
 
 namespace AzCp
 {
@@ -29,7 +31,7 @@ namespace AzCp
       _logger = logger;
       _repo = _configuration.GetSection("Repository").Get<Repository>();
 
-      if(_repo == null)
+      if (_repo == null)
       {
         throw new Exception("Unable to find the 'Repository' section in the application settings!");
       }
@@ -52,6 +54,20 @@ namespace AzCp
         TransferManager.Configurations.BlockSize = (int)_repo.BlockSize;
       }
 
+      if (_repo.DefaultConnectionLimit.HasValue)
+      {
+        ServicePointManager.DefaultConnectionLimit = (int)_repo.DefaultConnectionLimit;
+      }
+      else
+      {
+        ServicePointManager.DefaultConnectionLimit = Environment.ProcessorCount * 8;
+      }
+
+      if (_repo.Expect100Continue.HasValue)
+      {
+        ServicePointManager.Expect100Continue = (bool)_repo.Expect100Continue;
+      }
+
       // Display the config info
       var entryAssembly = Assembly.GetEntryAssembly();
       var informationalVersion = entryAssembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>().InformationalVersion;
@@ -59,17 +75,68 @@ namespace AzCp
       var product = entryAssembly.GetCustomAttribute<AssemblyProductAttribute>().Product;
       var description = entryAssembly.GetCustomAttribute<AssemblyDescriptionAttribute>().Description;
 
-      _logger.Information($@"{product} {informationalVersion} ({assemblyFileVersion})
-{description}
+      {
+        var repoDefaults = new Repository();
 
-Upload Folder:         {_repo.UploadFolder}
-Destination container: {_repo.ContainerName}
-  
-Transfer Configuration
-  Block Size:          {NumberFormatter.SizeSuffix(TransferManager.Configurations.BlockSize)}
-  Parallel Operations: {TransferManager.Configurations.ParallelOperations}
-  Recursive:           {_repo.Recursive}
-");
+        var info = $@"{product} {informationalVersion} ({assemblyFileVersion})
+{description}
+";
+        var colInfo = new int[] { 0, 30, 65, 75 };
+        var table = new List<string[]>()
+         {
+          new string[] { "Configuration entry",                     "Description",                    "Value",                        "Default" },
+          new string[] { "===================",                     "===========",                    "=====",                        "=======" },
+          Array.Empty<string>(),
+          new string[] { nameof(_repo.UploadFolder),                "Upload Folder",                  _repo.UploadFolder },//,             repoDefaults.UploadFolder },
+          new string[] { nameof(_repo.ArchiveFolder),               "Archive Folder",                 _repo.ArchiveFolder },//,            repoDefaults.ArchiveFolder },
+          new string[] { nameof(_repo.ContainerName),               "Destination container",          _repo.ContainerName,            repoDefaults.ContainerName },
+          new string[] { nameof(_repo.TransferCheckpointFilename),  "Transfer Checkpoint Filename",   _repo.TransferCheckpointFilename, repoDefaults.TransferCheckpointFilename },
+          new string[] { nameof(_repo.BlockSize),                   "Tx Block Size",                  TransferManager.Configurations.BlockSize.ToSizeSuffix(), repoDefaults.BlockSize.ToString() },
+          new string[] { nameof(_repo.ParallelOperations),          "Parallel Operations",            TransferManager.Configurations.ParallelOperations.ToString(), repoDefaults.ParallelOperations.ToString() },
+          new string[] { nameof(_repo.DefaultConnectionLimit),      "Default Connection Limit",       ServicePointManager.DefaultConnectionLimit.ToString(), repoDefaults.DefaultConnectionLimit.ToString() },
+          new string[] { nameof(_repo.Expect100Continue),           "Expect 100 Continue",            ServicePointManager.Expect100Continue.ToString(), repoDefaults.Expect100Continue.ToString() },
+          new string[] { nameof(_repo.Recursive),                   "Recursive the upload folder",    _repo.Recursive.ToString(),     repoDefaults.Recursive.ToString() },
+          Array.Empty<string>(),
+          new string[] { "For details of the configuration options see: https://libraries.io/github/Azure/azure=storage-net-data-movement" },
+          };
+
+        table.ForEach(row =>
+        {
+          var line = "";
+          for (int i = 0; i < row.Length; i++)
+          {
+            line = $"{line.PadRight(colInfo[i])}{row[i]} ";
+          }
+          info = info.TrimEnd(' ') + $"\n{line}";
+        });
+
+        _logger.Information(info);
+      }
+
+      if (_repo.UploadFolder == null)
+      {
+        throw new Exception("Please specify the upload folder in the application settings file!");
+      }
+
+      if (!Directory.Exists(_repo.UploadFolder))
+      {
+        throw new Exception("Missing upload folder.  Please create it and try again!");
+      }
+
+      if (!Directory.Exists(_repo.ArchiveFolder))
+      {
+        Directory.CreateDirectory(_repo.ArchiveFolder);
+      }
+
+      if (!Directory.Exists(Path.GetDirectoryName(_repo.TransferCheckpointFilename)))
+      {
+        Directory.CreateDirectory(Path.GetDirectoryName(_repo.TransferCheckpointFilename));
+      }
+
+      if (_repo.ContainerName == null)
+      {
+        throw new Exception("Please specify the container name in the application settings file!");
+      }
 
       var connectionString = _configuration.GetConnectionString("StorageConnectionString");
       if (connectionString == null)
@@ -161,7 +228,7 @@ Transfer Configuration
           while (Interlocked.Read(ref _changesInUploadFolder) == 0)
           {
             _feedback.WriteProgress("Waiting for new files to upload...");
-            
+
             if (linkedCts.Token.WaitHandle.WaitOne(TimeSpan.FromMilliseconds(1500 - DateTime.UtcNow.Millisecond)))
             {
               linkedCts.Token.ThrowIfCancellationRequested();
@@ -245,14 +312,17 @@ Transfer Configuration
         File.Move((string)e.Source, archivePath, true);
       }
 
-      result.FileFailed += (sender, e) => {
+      result.FileFailed += (sender, e) =>
+      {
         _logger.Information($"FAILED: {ToSourceDestination(e)}", null, IFeedback.Colors.ErrorForegroundColor);
       };
-      result.FileSkipped += (sender, e) => {
+      result.FileSkipped += (sender, e) =>
+      {
         _logger.Information($"Skipped: {ToSourceDestination(e)}");
         ArchiveFile(e);
       };
-      result.FileTransferred += (sender, e) => {
+      result.FileTransferred += (sender, e) =>
+      {
         _logger.Information($"Transferred: {ToSourceDestination(e)}");
         ArchiveFile(e);
       };
@@ -271,7 +341,7 @@ Transfer Configuration
 
     private string ToUserString(TransferStatus progress)
     {
-      return $"{progress.NumberOfFilesTransferred} transferred, {progress.NumberOfFilesSkipped} skipped, {progress.NumberOfFilesFailed} failed, {NumberFormatter.SizeSuffix(progress.BytesTransferred, 0)} ({progress.BytesTransferred:N0})";
+      return $"{progress.NumberOfFilesTransferred} transferred, {progress.NumberOfFilesSkipped} skipped, {progress.NumberOfFilesFailed} failed, {NumberFormatterExtension.ToSizeSuffix(progress.BytesTransferred, 0)} ({progress.BytesTransferred:N0})";
     }
 
     public CloudBlobDirectory GetBlobDirectory(CloudStorageAccount account, string containerName)
