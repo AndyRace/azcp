@@ -4,6 +4,8 @@
 # git rev-list HEAD | wc -l
 # git rev-parse HEAD
 
+Set-Location $PSScriptRoot
+
 $gitVersion=git describe --long --tags --dirty --always --match 'v[0-9]*\.[0-9]*'
 
 if ($gitVersion -match 'v(\d+\.\d+)-(\d+)-(.*)') {

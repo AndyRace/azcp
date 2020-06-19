@@ -362,3 +362,4 @@ MigrationBackup/
 /.vscode
 /test/test.ps1
 /test/test.cmd
+appSettings.secrets.json

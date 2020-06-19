@@ -1,4 +1,5 @@
 ﻿using Microsoft.Azure.Storage.DataMovement;
+using System;
 using System.IO;
 using System.Runtime.Serialization;
 using System.Runtime.Serialization.Json;
@@ -44,7 +45,7 @@ namespace AzCp
           return ser.ReadObject(reader) as AzCpCheckpoint;
         }
 #pragma warning disable CA1031 // Do not catch general exception types
-        catch (IOException)
+        catch (Exception ex) when (ex is IOException | ex is SerializationException)
         {
           // ignore any IO exceptions (e.g. file not found) and return an empty checkpoint
           return new AzCpCheckpoint();

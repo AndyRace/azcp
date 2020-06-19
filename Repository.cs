@@ -1,7 +1,9 @@
 using Microsoft.Azure.Storage.DataMovement;
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Net;
+using System.Reflection;
 
 namespace AzCp
 {
@@ -21,5 +23,110 @@ namespace AzCp
     public string TransferCheckpointFilename { get; set; } = Path.Combine(new string[] { ".azcp", "checkpoint.json" });
     public int? DefaultConnectionLimit { get; set; } = Environment.ProcessorCount * 8;
     public bool? Expect100Continue { get; set; } = ServicePointManager.Expect100Continue;
+
+    internal string ToFeedbackString()
+    {
+      // Display the config info
+      var entryAssembly = Assembly.GetEntryAssembly();
+      var informationalVersion = entryAssembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>().InformationalVersion;
+      var assemblyFileVersion = entryAssembly.GetCustomAttribute<AssemblyFileVersionAttribute>().Version;
+      var product = entryAssembly.GetCustomAttribute<AssemblyProductAttribute>().Product;
+      var description = entryAssembly.GetCustomAttribute<AssemblyDescriptionAttribute>().Description;
+
+      var info = $@"{product} {informationalVersion} ({assemblyFileVersion})
+{description}
+
+";
+
+      var repoDefaults = new Repository();
+
+      var colInfo = new int[] { 0, 30, 65, 75 };
+      var table = new List<string[]>()
+         {
+          new string[] { "Configuration entry",              "Description",                  "Value",                    "Default" },
+          new string[] { "===================",              "===========",                  "=====",                    "=======" },
+          Array.Empty<string>(),
+          new string[] { nameof(UploadFolder),               "Upload Folder",                UploadFolder,               repoDefaults.UploadFolder },
+          new string[] { nameof(ArchiveFolder),              "Archive Folder",               ArchiveFolder,              repoDefaults.ArchiveFolder },
+          new string[] { nameof(ContainerName),              "Destination container",        ContainerName,              repoDefaults.ContainerName },
+          new string[] { nameof(TransferCheckpointFilename), "Transfer Checkpoint Filename", TransferCheckpointFilename, repoDefaults.TransferCheckpointFilename },
+          new string[] { nameof(BlockSize),                  "Tx Block Size",                BlockSize.ToSizeSuffix(),   repoDefaults.BlockSize.ToSizeSuffix() },
+          new string[] { nameof(ParallelOperations),         "Parallel Operations",          ParallelOperations.ToString(), repoDefaults.ParallelOperations.ToString() },
+          new string[] { nameof(DefaultConnectionLimit),     "Default Connection Limit",     DefaultConnectionLimit.ToString(), repoDefaults.DefaultConnectionLimit.ToString() },
+          new string[] { nameof(Expect100Continue),          "Wait for '100' response?",     Expect100Continue.ToString(), repoDefaults.Expect100Continue.ToString() },
+          new string[] { nameof(Recursive),                  "Recurse the upload folder",    Recursive.ToString(),     repoDefaults.Recursive.ToString() },
+          Array.Empty<string>(),
+          new string[] { "For details of the configuration options see: https://github.com/Azure/azure-storage-net-data-movement/" },
+          };
+
+      table.ForEach(row =>
+      {
+        var line = "";
+        for (int i = 0; i < row.Length; i++)
+        {
+          if (line.Length > colInfo[i])
+          {
+            info = info.TrimEnd(' ') + $"\n{line}";
+            line = string.Empty;
+          }
+          line = $"{line.PadRight(colInfo[i])}{row[i]} ";
+        }
+        info = info.TrimEnd(' ') + $"\n{line}";
+      });
+
+      return info;
+    }
+
+    internal void UpdateEnvironmentFromSettings()
+    {
+      if (ParallelOperations.HasValue)
+      {
+        TransferManager.Configurations.ParallelOperations = (int)ParallelOperations;
+      }
+
+      if (BlockSize.HasValue)
+      {
+        TransferManager.Configurations.BlockSize = (int)BlockSize;
+      }
+
+      if (DefaultConnectionLimit.HasValue)
+      {
+        ServicePointManager.DefaultConnectionLimit = (int)DefaultConnectionLimit;
+      }
+      else
+      {
+        ServicePointManager.DefaultConnectionLimit = Environment.ProcessorCount * 8;
+      }
+
+      if (Expect100Continue.HasValue)
+      {
+        ServicePointManager.Expect100Continue = (bool)Expect100Continue;
+      }
+
+      if (string.IsNullOrEmpty(UploadFolder))
+      {
+        throw new Exception("Please specify the upload folder in the application settings file");
+      }
+
+      if (!Directory.Exists(UploadFolder))
+      {
+        Directory.CreateDirectory(UploadFolder);
+      }
+
+      if (!Directory.Exists(ArchiveFolder))
+      {
+        Directory.CreateDirectory(ArchiveFolder);
+      }
+
+      if (!Directory.Exists(Path.GetDirectoryName(TransferCheckpointFilename)))
+      {
+        Directory.CreateDirectory(Path.GetDirectoryName(TransferCheckpointFilename));
+      }
+
+      if (string.IsNullOrEmpty(ContainerName))
+      {
+        throw new Exception("Please specify the container name in the application settings file");
+      }
+    }
   }
 }

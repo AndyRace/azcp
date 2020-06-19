@@ -1,4 +1,5 @@
 ﻿using System;
+using System.IO;
 using System.Threading.Tasks;
 using AzCp.Interfaces;
 using Microsoft.Extensions.Configuration;
@@ -35,8 +36,9 @@ namespace AzCp
         return 1;
       }
 #pragma warning disable CA1031 // Do not catch general exception types
-      catch (Exception)
+      catch (Exception ex)
       {
+        Log.Error(ex, "Unexpected error");
         return 2;
       }
 #pragma warning restore CA1031 // Do not catch general exception types
@@ -52,6 +54,7 @@ namespace AzCp
           .ConfigureHostConfiguration(configHost =>
           {
             configHost.AddEnvironmentVariables(prefix: ENVIRONMENT_PREFIX);
+            configHost.AddJsonFile(Path.Combine(Directory.GetCurrentDirectory(), "appsettings.secrets.json"), true);
           })
           .ConfigureServices((hostContext, services) =>
           {
