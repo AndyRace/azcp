@@ -14,15 +14,16 @@ namespace AzCp
     public string ArchiveFolder { get; set; } = "Archive";
 
     // https://docs.microsoft.com/en-us/dotnet/api/microsoft.azure.storage.datamovement.transferconfigurations.paralleloperations?view=azure-dotnet
-    public int? ParallelOperations { get; set; } = TransferManager.Configurations.ParallelOperations;
+    public int ParallelOperations { get; set; } = TransferManager.Configurations.ParallelOperations;
 
+    // https://docs.microsoft.com/en-us/previous-versions/azure/reference/mt805217(v=azure.100)
     // https://docs.microsoft.com/en-us/dotnet/api/microsoft.azure.storage.datamovement.transferconfigurations.blocksize?view=azure-dotnet#Microsoft_Azure_Storage_DataMovement_TransferConfigurations_BlockSize
-    public int? BlockSize { get; set; } = TransferManager.Configurations.BlockSize;
+    public int BlockSize { get; set; } = TransferManager.Configurations.BlockSize;
 
     public bool Recursive { get; set; } = true;
     public string TransferCheckpointFilename { get; set; } = Path.Combine(new string[] { ".azcp", "checkpoint.json" });
-    public int? DefaultConnectionLimit { get; set; } = Environment.ProcessorCount * 8;
-    public bool? Expect100Continue { get; set; } = ServicePointManager.Expect100Continue;
+    public int DefaultConnectionLimit { get; set; } = Environment.ProcessorCount * 8;
+    public bool Expect100Continue { get; set; } = ServicePointManager.Expect100Continue;
 
     internal string ToFeedbackString()
     {
@@ -79,33 +80,14 @@ namespace AzCp
 
     internal void UpdateEnvironmentFromSettings()
     {
-      if (ParallelOperations.HasValue)
-      {
-        TransferManager.Configurations.ParallelOperations = (int)ParallelOperations;
-      }
-
-      if (BlockSize.HasValue)
-      {
-        TransferManager.Configurations.BlockSize = (int)BlockSize;
-      }
-
-      if (DefaultConnectionLimit.HasValue)
-      {
-        ServicePointManager.DefaultConnectionLimit = (int)DefaultConnectionLimit;
-      }
-      else
-      {
-        ServicePointManager.DefaultConnectionLimit = Environment.ProcessorCount * 8;
-      }
-
-      if (Expect100Continue.HasValue)
-      {
-        ServicePointManager.Expect100Continue = (bool)Expect100Continue;
-      }
-
       if (string.IsNullOrEmpty(UploadFolder))
       {
         throw new Exception("Please specify the upload folder in the application settings file");
+      }
+
+      if (string.IsNullOrEmpty(ContainerName))
+      {
+        throw new Exception("Please specify the container name in the application settings file");
       }
 
       if (!Directory.Exists(UploadFolder))
@@ -123,10 +105,10 @@ namespace AzCp
         Directory.CreateDirectory(Path.GetDirectoryName(TransferCheckpointFilename));
       }
 
-      if (string.IsNullOrEmpty(ContainerName))
-      {
-        throw new Exception("Please specify the container name in the application settings file");
-      }
+      TransferManager.Configurations.ParallelOperations = ParallelOperations;
+      TransferManager.Configurations.BlockSize = BlockSize;
+      ServicePointManager.DefaultConnectionLimit = DefaultConnectionLimit;
+      ServicePointManager.Expect100Continue = Expect100Continue;
     }
   }
 }

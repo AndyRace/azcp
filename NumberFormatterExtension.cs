@@ -13,13 +13,17 @@ namespace AzCp
       return ToSizeSuffix(value, decimalPlaces, SizeSuffixes);
     }
 
-    public static string ToSizeSuffix(this long value, int decimalPlaces = 0)
+    public static string ToSizeSuffix(this int value, int decimalPlaces = 0)
     {
       return ToSizeSuffix(value, decimalPlaces, SizeSuffixes);
     }
 
-
     public static string ToSizeSuffix(this long? value, int decimalPlaces = 0)
+    {
+      return ToSizeSuffix(value, decimalPlaces, SizeSuffixes);
+    }
+
+    public static string ToSizeSuffix(this long value, int decimalPlaces = 0)
     {
       return ToSizeSuffix(value, decimalPlaces, SizeSuffixes);
     }
@@ -58,7 +62,7 @@ namespace AzCp
         return ((numBytes * 8) / (elapsedMilliseconds / 1000)).ToSizeSuffix(1, BitsPerSecSuffixes) + "/s";
       }
 #pragma warning disable CA1031 // Do not catch general exception types
-      catch (OverflowException)
+      catch (Exception)
       {
         return string.Empty;
       }
