@@ -9,6 +9,9 @@ namespace AzCp
 {
   public class Repository
   {
+    public const string AppSettingsJsonFilename = "appsettings.json";
+    public const string AppSettingsSecretsJsonFilename = "appsettings.secrets.json";
+
     public string ContainerName { get; set; }
     public string UploadFolder { get; set; } = "Upload";
     public string ArchiveFolder { get; set; } = "Archive";
@@ -25,17 +28,24 @@ namespace AzCp
     public int DefaultConnectionLimit { get; set; } = Environment.ProcessorCount * 8;
     public bool Expect100Continue { get; set; } = ServicePointManager.Expect100Continue;
 
+    public static string ApplicationInfo {
+      get
+      {
+        // Display the config info
+        var entryAssembly = Assembly.GetEntryAssembly();
+        var informationalVersion = entryAssembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>().InformationalVersion;
+        var assemblyFileVersion = entryAssembly.GetCustomAttribute<AssemblyFileVersionAttribute>().Version;
+        var product = entryAssembly.GetCustomAttribute<AssemblyProductAttribute>().Product;
+        var description = entryAssembly.GetCustomAttribute<AssemblyDescriptionAttribute>().Description;
+
+        return $@"{product} {informationalVersion} ({assemblyFileVersion})
+{description}";
+      }
+    }
+
     internal string ToFeedbackString()
     {
-      // Display the config info
-      var entryAssembly = Assembly.GetEntryAssembly();
-      var informationalVersion = entryAssembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>().InformationalVersion;
-      var assemblyFileVersion = entryAssembly.GetCustomAttribute<AssemblyFileVersionAttribute>().Version;
-      var product = entryAssembly.GetCustomAttribute<AssemblyProductAttribute>().Product;
-      var description = entryAssembly.GetCustomAttribute<AssemblyDescriptionAttribute>().Description;
-
-      var info = $@"{product} {informationalVersion} ({assemblyFileVersion})
-{description}
+      var info = ApplicationInfo + @"
 
 ";
 

@@ -13,6 +13,7 @@ namespace AzCp
   public static class Program
   {
     private const string ENVIRONMENT_PREFIX = "AZCP_";
+    private static bool _isDevelopment;
 
     public static async Task<int> Main(string[] args)
     {
@@ -38,7 +39,15 @@ namespace AzCp
 #pragma warning disable CA1031 // Do not catch general exception types
       catch (Exception ex)
       {
-        Log.Error(ex, "Unexpected error");
+        if (_isDevelopment)
+        {
+          Log.Error(ex, Repository.ApplicationInfo);
+        }
+        else
+        {
+          Log.Error(Repository.ApplicationInfo);
+        }
+
         return 2;
       }
 #pragma warning restore CA1031 // Do not catch general exception types
@@ -54,13 +63,14 @@ namespace AzCp
           .ConfigureHostConfiguration(configHost =>
           {
             configHost.AddEnvironmentVariables(prefix: ENVIRONMENT_PREFIX);
-            configHost.AddJsonFile(Path.Combine(Directory.GetCurrentDirectory(), "appsettings.secrets.json"), true);
+            configHost.AddJsonFile(Path.Combine(Directory.GetCurrentDirectory(), Repository.AppSettingsSecretsJsonFilename), true);
           })
           .ConfigureServices((hostContext, services) =>
           {
             services.AddSingleton(Log.Logger);
             services.AddTransient(typeof(IFeedback), typeof(ConsoleFeedback));
             services.AddHostedService<Application>();
+            _isDevelopment = hostContext.HostingEnvironment.IsDevelopment();
           });
   }
 }

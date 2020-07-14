@@ -15,8 +15,6 @@ namespace AzCp
 {
   class Application : IHostedService
   {
-    private const string AppSettingsFilename = "appsettings.json";
-
     private readonly IConfiguration _configuration;
     private readonly IFeedback _feedback;
     private readonly ILogger _logger;
@@ -34,8 +32,8 @@ namespace AzCp
 
       if (_repo == null)
       {
-        throw new Exception($@"Unable to find the '{RepositorySection}' section in the application settings file '{AppSettingsFilename}'
-Please check that the JSON settings file '{AppSettingsFilename} exists and contains the relevant '{RepositorySection}' section");
+        throw new Exception($@"Unable to find the '{RepositorySection}' section in the application settings files '{Repository.AppSettingsJsonFilename}' and '{Repository.AppSettingsSecretsJsonFilename}'
+Please check that the JSON settings files exists and contains the relevant '{RepositorySection}' section");
       }
     }
 
