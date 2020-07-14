@@ -34,4 +34,6 @@ jobs:
       uses: actions/upload-artifact@v1.0.0
       with:
         name: azcp
-        path: bin\Release\netcoreapp3.1\Publish
+        path: |
+          bin\Release\netcoreapp3.1\Publish
+          test\appSettings.json
