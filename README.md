@@ -1,4 +1,4 @@
-## Why use AzCp instead of AzCopy or Azure Storage Explorer?
+# Why use AzCp instead of AzCopy or Azure Storage Explorer?
 
 Unlike [Azure Storage Explorer](https://azure.microsoft.com/en-us/features/storage-explorer/) and [AzCopy](https://docs.microsoft.com/en-us/azure/storage/common/storage-use-azcopy-v10?toc=/azure/storage/blobs/toc.json) I want to be able to resume partially uploaded files to Azure BLOB storage.
 
@@ -42,3 +42,7 @@ The following assumes you are using the defaults in [appSettings.json](test/appS
 * Copy or move files into the ***Uploads*** sub-folder
 * AzCp will copy all of these files - respecting any sub-folder structure - into the storage container specified in appSettings.secrets.json
 * Once copied, the file is archived to the **Archive** sub-folder
+
+## Build status
+
+![.NET Core](https://github.com/AndyRace/azcp/workflows/.NET%20Core/badge.svg)
