@@ -22,16 +22,14 @@ jobs:
         dotnet-version: 3.1.101
     - name: Install dependencies
       run: dotnet restore
-#     - name: Build
-#       run: dotnet build --configuration Release --no-restore
-#    - name: publish
-#      run: dotnet publish /p:DeployOnBuild=true /p:PublishProfile=FolderProfile
     - name: publish
       run: pwsh -command ".\$GITHUB_WORKSPACE\publish.ps1"
     - name: Test
       run: dotnet test --no-restore --verbosity normal
     - name: Upload Artifact
-      uses: actions/upload-artifact@v1.0.0
+      uses: actions/upload-artifact@v2
       with:
         name: azcp
-        path: bin\Release\netcoreapp3.1\Publish
+        path: |
+          bin/Release/netcoreapp3.1/Publish/
+          test/appSettings.json
