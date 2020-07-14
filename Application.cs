@@ -15,6 +15,8 @@ namespace AzCp
 {
   class Application : IHostedService
   {
+    private const string AppSettingsFilename = "appsettings.json";
+
     private readonly IConfiguration _configuration;
     private readonly IFeedback _feedback;
     private readonly ILogger _logger;
@@ -22,14 +24,18 @@ namespace AzCp
 
     public Application(IConfiguration configuration, IFeedback feedback, ILogger logger)
     {
+      const string RepositorySection = "Repository";
+
       _configuration = configuration;
       _feedback = feedback;
       _logger = logger;
-      _repo = _configuration.GetSection("Repository").Get<Repository>();
+
+      _repo = _configuration.GetSection(RepositorySection).Get<Repository>();
 
       if (_repo == null)
       {
-        throw new Exception("Unable to find the 'Repository' section in the application settings!");
+        throw new Exception($@"Unable to find the '{RepositorySection}' section in the application settings file '{AppSettingsFilename}'
+Please check that the JSON settings file '{AppSettingsFilename} exists and contains the relevant '{RepositorySection}' section");
       }
     }
 
