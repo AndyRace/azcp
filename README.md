@@ -19,7 +19,7 @@ So if you have successfully uploaded 90% of your multi-Terrabyte file and AzCopy
 1. Copy the AzCp.exe and appSettings.json files to a folder of your choice
 2. Create an appSettings.secrets.json file in the same folder as the .exe with contents of the form:
 
-``` json
+```
 {
   "Repository": {
     // The 'BlobContainerUri' entry contains Shared Access Signature URI that you got from Azure Storage Explorer (for example)
