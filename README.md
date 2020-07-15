@@ -21,15 +21,10 @@ So if you have successfully uploaded 90% of your multi-Terrabyte file and AzCopy
 
 ``` json
 {
-  "ConnectionStrings": {
-    // Define the BLOB storage connection string to use
-    // Fill in the entries within {} with details of your storage account
-    "StorageConnectionString": "DefaultEndpointsProtocol=https;AccountName={accountName};AccountKey={accountKey};BlobEndpoint={blobEndpoint};"
-  },
-
   "Repository": {
-    // The name of the Storage Container
-    "ContainerName": "{name}"
+    // The 'BlobContainerUri' entry contains Shared Access Signature URI that you got from Azure Storage Explorer (for example)
+    // It is of the form:
+    //   "BlobContainerUri": "https://{storage account name}.blob.core.windows.net/{container name}?{SAS query string}"
   }
 }
 ```
@@ -45,4 +40,4 @@ The following assumes you are using the defaults in [appSettings.json](test/appS
 
 ## Build status
 
-![.NET Core](https://github.com/AndyRace/azcp/workflows/.NET%20Core/badge.svg)
+![build](https://github.com/AndyRace/azcp/workflows/build/badge.svg)
