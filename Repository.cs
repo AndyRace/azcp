@@ -1,3 +1,4 @@
+using Microsoft.Azure.Storage.Blob;
 using Microsoft.Azure.Storage.DataMovement;
 using System;
 using System.Collections.Generic;
@@ -12,7 +13,8 @@ namespace AzCp
     public const string AppSettingsJsonFilename = "appsettings.json";
     public const string AppSettingsSecretsJsonFilename = "appsettings.secrets.json";
 
-    public string ContainerName { get; set; }
+    public Uri BlobContainerUri { get; set; }
+
     public string UploadFolder { get; set; } = "Upload";
     public string ArchiveFolder { get; set; } = "Archive";
 
@@ -28,7 +30,8 @@ namespace AzCp
     public int DefaultConnectionLimit { get; set; } = Environment.ProcessorCount * 8;
     public bool Expect100Continue { get; set; } = ServicePointManager.Expect100Continue;
 
-    public static string ApplicationInfo {
+    public static string ApplicationFullVersion
+    {
       get
       {
         // Display the config info
@@ -36,16 +39,31 @@ namespace AzCp
         var informationalVersion = entryAssembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>().InformationalVersion;
         var assemblyFileVersion = entryAssembly.GetCustomAttribute<AssemblyFileVersionAttribute>().Version;
         var product = entryAssembly.GetCustomAttribute<AssemblyProductAttribute>().Product;
-        var description = entryAssembly.GetCustomAttribute<AssemblyDescriptionAttribute>().Description;
+        return $@"{product} {informationalVersion} ({assemblyFileVersion})";
+      }
+    }
 
-        return $@"{product} {informationalVersion} ({assemblyFileVersion})
-{description}";
+    public static string ApplicationDescription
+    {
+      get
+      {
+        var entryAssembly = Assembly.GetEntryAssembly();
+        return entryAssembly.GetCustomAttribute<AssemblyDescriptionAttribute>().Description;
+      }
+    }
+
+    public CloudBlobDirectory BlobDirectory
+    {
+      get
+      {
+        return BlobContainerUri == null ? null : new CloudBlobContainer(BlobContainerUri).GetDirectoryReference("");
       }
     }
 
     internal string ToFeedbackString()
     {
-      var info = ApplicationInfo + @"
+      var info = $@"{ApplicationFullVersion}
+{ApplicationDescription}
 
 ";
 
@@ -59,7 +77,6 @@ namespace AzCp
           Array.Empty<string>(),
           new string[] { nameof(UploadFolder),               "Upload Folder",                UploadFolder,               repoDefaults.UploadFolder },
           new string[] { nameof(ArchiveFolder),              "Archive Folder",               ArchiveFolder,              repoDefaults.ArchiveFolder },
-          new string[] { nameof(ContainerName),              "Destination container",        ContainerName,              repoDefaults.ContainerName },
           new string[] { nameof(TransferCheckpointFilename), "Transfer Checkpoint Filename", TransferCheckpointFilename, repoDefaults.TransferCheckpointFilename },
           new string[] { nameof(BlockSize),                  "Tx Block Size",                BlockSize.ToSizeSuffix(),   repoDefaults.BlockSize.ToSizeSuffix() },
           new string[] { nameof(ParallelOperations),         "Parallel Operations",          ParallelOperations.ToString(), repoDefaults.ParallelOperations.ToString() },
@@ -90,14 +107,14 @@ namespace AzCp
 
     internal void UpdateEnvironmentFromSettings()
     {
+      if (BlobContainerUri == null)
+      {
+        throw new Exception($"Please specify the URI to the BLOB container in the application settings file ({nameof(BlobContainerUri)})");
+      }
+
       if (string.IsNullOrEmpty(UploadFolder))
       {
         throw new Exception("Please specify the upload folder in the application settings file");
-      }
-
-      if (string.IsNullOrEmpty(ContainerName))
-      {
-        throw new Exception("Please specify the container name in the application settings file");
       }
 
       if (!Directory.Exists(UploadFolder))

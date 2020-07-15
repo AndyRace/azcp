@@ -48,25 +48,12 @@ Please check that the JSON settings files exists and contains the relevant '{Rep
 
       _repo.UpdateEnvironmentFromSettings();
 
-      var connectionString = _configuration.GetConnectionString("StorageConnectionString");
-      if (string.IsNullOrEmpty(connectionString))
-      {
-        throw new Exception(@"Unable to find 'StorageConnectionString' details!
-There are a number of ways to set this.
-e.g. from a command-line, set the 'AzCp_ConnectionStrings__StorageConnectionString' environment variable.
-  SET AzCp_ConnectionStrings__StorageConnectionString=""DefaultEndpointsProtocol=https;AccountName={account name};AccountKey={account key};BlobEndpoint=https://{container}.blob.core.windows.net/""
-");
-      }
+      await TransferLocalDirectoryToAzureBlob(_repo.BlobDirectory, cancellationToken);
 
-      CloudStorageAccount account = CloudStorageAccount.Parse(connectionString);
-
-      await TransferLocalDirectoryToAzureBlob(account, cancellationToken);
     }
 
-    public async Task TransferLocalDirectoryToAzureBlob(CloudStorageAccount account, CancellationToken cancellationToken)
+    public async Task TransferLocalDirectoryToAzureBlob(CloudBlobDirectory blobDirectory, CancellationToken cancellationToken)
     {
-      var blobDirectory = GetBlobDirectory(account, _repo.ContainerName);
-
       UploadDirectoryOptions options = new UploadDirectoryOptions()
       {
         Recursive = _repo.Recursive
@@ -147,20 +134,6 @@ e.g. from a command-line, set the 'AzCp_ConnectionStrings__StorageConnectionStri
         throw;
       }
 #pragma warning restore CA1031 // Do not catch general exception types
-    }
-
-    public CloudBlobDirectory GetBlobDirectory(CloudStorageAccount account, string containerName)
-    {
-      var container = account.CreateCloudBlobClient().GetContainerReference(containerName);
-
-      //WriteProgress("Creating BLOB Container (if it doesn't exist already)");
-      //await container.CreateIfNotExistsAsync();
-
-      var blob = container.GetDirectoryReference("");
-
-      //WriteLine("Got BLOB Container reference");
-
-      return blob;
     }
   }
 }

@@ -41,11 +41,11 @@ namespace AzCp
       {
         if (_isDevelopment)
         {
-          Log.Error(ex, Repository.ApplicationInfo);
+          Log.Error(ex, Repository.ApplicationFullVersion);
         }
         else
         {
-          Log.Error(Repository.ApplicationInfo);
+          Log.Error($@"{Repository.ApplicationFullVersion}: {ex.Message}");
         }
 
         return 2;
