@@ -83,7 +83,7 @@ namespace AzCp
           feedback.WriteProgress(progress.ToUserString((long)InitialBytesTransferred, stopwatch), progress.NumberOfFilesFailed == 0 ? IFeedback.Colors.OkForegroundColor : IFeedback.Colors.WarningForegroundColor);
         }
 
-        AzCpCheckpoint.Write(transferCheckpointFilename, LastCheckpoint);
+        AzCpCheckpoint.Write(LastCheckpoint, transferCheckpointFilename);
       });
     }
   }

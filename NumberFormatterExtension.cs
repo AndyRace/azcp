@@ -59,7 +59,7 @@ namespace AzCp
 
       try
       {
-        return ((numBytes * 8) / (elapsedMilliseconds / 1000)).ToSizeSuffix(1, BitsPerSecSuffixes) + "/s";
+        return ((numBytes * 8) / (elapsedMilliseconds / 1000)).ToSizeSuffix(1, BitsPerSecSuffixes) + "ps";
       }
 #pragma warning disable CA1031 // Do not catch general exception types
       catch (Exception)

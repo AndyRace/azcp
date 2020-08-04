@@ -56,7 +56,8 @@ Please check that the JSON settings files exists and contains the relevant '{Rep
     {
       UploadDirectoryOptions options = new UploadDirectoryOptions()
       {
-        Recursive = _repo.Recursive
+        Recursive = _repo.Recursive,
+        BlobType = BlobType.BlockBlob
         //SearchPattern = 
       };
 
@@ -68,7 +69,7 @@ Please check that the JSON settings files exists and contains the relevant '{Rep
 
       try
       {
-        var transferCheckpoint = AzCpCheckpoint.Read(_repo.TransferCheckpointFilename).TransferCheckpoint;
+        var transferCheckpoint = AzCpCheckpoint.Read(_repo.TransferCheckpointFilename);
         if (transferCheckpoint != null)
         {
           _logger.Information("Resuming upload...");
