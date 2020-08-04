@@ -19,16 +19,22 @@ namespace AzCp
     public string ArchiveFolder { get; set; } = "Archive";
 
     // https://docs.microsoft.com/en-us/dotnet/api/microsoft.azure.storage.datamovement.transferconfigurations.paralleloperations?view=azure-dotnet
-    public int ParallelOperations { get; set; } = TransferManager.Configurations.ParallelOperations;
+    // NOTE: Impirically we found that TransferManager.Configurations.ParallelOperations was too high and could be one of the factors causing thread locking
+    public int ParallelOperations { get; set; } = TransferManager.Configurations.ParallelOperations / 2;
 
     // https://docs.microsoft.com/en-us/previous-versions/azure/reference/mt805217(v=azure.100)
     // https://docs.microsoft.com/en-us/dotnet/api/microsoft.azure.storage.datamovement.transferconfigurations.blocksize?view=azure-dotnet#Microsoft_Azure_Storage_DataMovement_TransferConfigurations_BlockSize
     public int BlockSize { get; set; } = TransferManager.Configurations.BlockSize;
 
     public bool Recursive { get; set; } = true;
-    public string TransferCheckpointFilename { get; set; } = Path.Combine(new string[] { ".azcp", "checkpoint.json" });
-    public int DefaultConnectionLimit { get; set; } = Environment.ProcessorCount * 8;
-    public bool Expect100Continue { get; set; } = ServicePointManager.Expect100Continue;
+
+    public string TransferCheckpointFilename { get; set; } = Path.Combine(new string[] { ".azcp", "checkpoint.bin" });
+
+    // NOTE: Impirically we found that the suggested default of Environment.ProcessorCount * 8 was too high and could be one of the factors causing thread locking
+    public int DefaultConnectionLimit { get; set; } = Environment.ProcessorCount * 4;
+
+    // NOTE: Impirically we found that in our scenarios we were getting much more reliable upload results if we didn't wait for the 100 response
+    public bool Expect100Continue { get; set; } = false; // ServicePointManager.Expect100Continue;
 
     public static string ApplicationFullVersion
     {
