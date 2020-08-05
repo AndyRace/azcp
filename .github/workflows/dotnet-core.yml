@@ -21,11 +21,11 @@ jobs:
       with:
         dotnet-version: 3.1.101
     - name: Install dependencies
-      run: dotnet restore
+      run: dotnet restore azcp.sln
     - name: publish
       run: pwsh -command ".\$GITHUB_WORKSPACE\publish.ps1"
     - name: Test
-      run: dotnet test --no-restore --verbosity normal
+      run: dotnet test --no-restore --verbosity normal azcp.sln
     - name: Upload Artifact
       uses: actions/upload-artifact@v2
       with:
