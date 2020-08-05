@@ -65,7 +65,4 @@ NOTE: This tool is capable of resuming files that have been partially uploaded</
     <Folder Include="test\archive\" />
     <Folder Include="test\.azcp\" />
   </ItemGroup>
-  <ItemGroup>
-    <ProjectReference Include="..\..\Azure\azure-storage-net-data-movement\lib\DataMovement.csproj" />
-  </ItemGroup>
 </Project>
