@@ -1,6 +1,6 @@
 using AzCp.Interfaces;
-using Microsoft.Azure.Storage;
 using Microsoft.Azure.Storage.Blob;
+using Microsoft.Azure.Storage.File;
 using Microsoft.Azure.Storage.DataMovement;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Hosting;
@@ -48,11 +48,49 @@ Please check that the JSON settings files exists and contains the relevant '{Rep
 
       _repo.UpdateEnvironmentFromSettings();
 
-      await TransferLocalDirectoryToAzureBlob(_repo.BlobDirectory, cancellationToken);
-
+      if (_repo.BlobDirectory != null)
+      {
+        await TransferLocalDirectoryToAzure(_repo.BlobDirectory, cancellationToken);
+      }
+      else if (_repo.FileDirectory != null)
+      {
+        await TransferLocalDirectoryToAzure(_repo.FileDirectory, cancellationToken);
+      }
+      else
+      {
+        throw new Exception("Please specify the Azure BLOB or Azure File URI in the configuration settings");
+      }
     }
 
-    public async Task TransferLocalDirectoryToAzureBlob(CloudBlobDirectory blobDirectory, CancellationToken cancellationToken)
+    private async Task TransferLocalDirectoryToAzure(CloudFileDirectory fileDirectory, CancellationToken cancellationToken)
+    {
+      await TransferLocalDirectoryToAzureStorage(
+        async (uploadFolder, options, context, linkedCancellationToken) =>
+        {
+          return await TransferManager.UploadDirectoryAsync(uploadFolder, fileDirectory, options, context, linkedCancellationToken);
+        },
+        (e) => { 
+          return $"'{e.Source}' => '{((CloudFile)e.Destination).Name}'"; },
+        cancellationToken);
+    }
+
+
+    private async Task TransferLocalDirectoryToAzure(CloudBlobDirectory blobDirectory, CancellationToken cancellationToken)
+    {
+      await TransferLocalDirectoryToAzureStorage(
+        async (uploadFolder, options, context, linkedCancellationToken) =>
+        {
+          return await TransferManager.UploadDirectoryAsync(uploadFolder, blobDirectory, options, context, linkedCancellationToken);
+        },
+        (e) => { 
+          return $"'{e.Source}' => '{((CloudBlobContainer)e.Destination).Name}'"; },
+        cancellationToken);
+    }
+
+    public async Task TransferLocalDirectoryToAzureStorage(Func<string, UploadDirectoryOptions, DirectoryTransferContext, CancellationToken, Task<TransferStatus>> UploadDirectoryAsync,
+      Func<TransferEventArgs, string> getSourceToDestinationInfo,
+
+      CancellationToken cancellationToken)
     {
       UploadDirectoryOptions options = new UploadDirectoryOptions()
       {
@@ -79,7 +117,7 @@ Please check that the JSON settings files exists and contains the relevant '{Rep
         {
           Stopwatch stopWatch = new Stopwatch();// Stopwatch.StartNew();
 
-          var context = new MyDirectoryTransferContext(_logger, _feedback, _repo.UploadFolder, _repo.ArchiveFolder, _repo.TransferCheckpointFilename, stopWatch, transferCheckpoint);
+          var context = new MyDirectoryTransferContext(_logger, _feedback, _repo.UploadFolder, _repo.ArchiveFolder, _repo.TransferCheckpointFilename, stopWatch, transferCheckpoint, getSourceToDestinationInfo);
 
           transferCheckpoint = null;
 
@@ -88,7 +126,8 @@ Please check that the JSON settings files exists and contains the relevant '{Rep
           watcher.ResetChangeCount();
 
           stopWatch.Start();
-          var transferStatus = await TransferManager.UploadDirectoryAsync(_repo.UploadFolder, blobDirectory, options, context, linkedCts.Token);
+          // var transferStatus = await TransferManager.UploadDirectoryAsync(_repo.UploadFolder, blobDirectory, options, context, linkedCts.Token);
+          var transferStatus = await UploadDirectoryAsync(_repo.UploadFolder, options, context, linkedCts.Token);
           stopWatch.Stop();
 
           linkedCts.Token.ThrowIfCancellationRequested();
@@ -128,13 +167,11 @@ Please check that the JSON settings files exists and contains the relevant '{Rep
         _logger.Information($"The transfer was cancelled");
         throw;
       }
-#pragma warning disable CA1031 // Do not catch general exception types
       catch (Exception)
       {
         //_logger.Error(ex, $"UNEXPECTED ERROR: {ex.Message}");
         throw;
       }
-#pragma warning restore CA1031 // Do not catch general exception types
     }
   }
 }

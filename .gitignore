@@ -354,7 +354,6 @@ MigrationBackup/
 /Properties/launchSettings.json
 /Properties/serviceDependencies.local.json
 *.exe
-/test/get-secrets.cmd
 /test/upload
 /test/archive
 /test/output
@@ -362,5 +361,5 @@ MigrationBackup/
 /.vscode
 /test/test.ps1
 /test/test.cmd
-appSettings.secrets.json
 **/!*
+**/*secrets*

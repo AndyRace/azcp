@@ -1,5 +1,4 @@
 ﻿using AzCp.Interfaces;
-using Microsoft.Azure.Storage.Blob;
 using Microsoft.Azure.Storage.DataMovement;
 using System;
 using System.IO;
@@ -15,23 +14,13 @@ namespace AzCp
     public MyDirectoryTransferContext(ILogger logger, IFeedback feedback,
       string uploadFolder, string archiveFolder, string transferCheckpointFilename,
       Stopwatch stopwatch,
-      TransferCheckpoint checkpoint) : base(checkpoint)
+      TransferCheckpoint checkpoint,
+      Func<TransferEventArgs, string> getSourceToDestinationInfo) : base(checkpoint)
     {
       if (checkpoint == null)
       {
         // if there's no previous checkpoint then set the initial tx to 0 instead of null (resuming)
         InitialBytesTransferred = 0;
-      }
-
-      static string ToSourceDestination(TransferEventArgs e)
-      {
-        //var result = $"'{e.Source}' => '{((CloudBlockBlob)e.Destination).Name}'";
-        var result = $"'{e.Source}'";
-        if (e.Exception != null)
-        {
-          result += $" ({e.Exception.Message})";
-        }
-        return result;
       }
 
       void ArchiveFile(TransferEventArgs e)
@@ -47,7 +36,8 @@ namespace AzCp
         lock (feedback)
         {
           feedback.WriteProgress();
-          logger.Information($"FAILED: {ToSourceDestination(e)}", null, IFeedback.Colors.ErrorForegroundColor);
+          logger.Warning($"FAILED: {getSourceToDestinationInfo(e)}", null, IFeedback.Colors.ErrorForegroundColor);
+          e.Exception?.LogIt();
         }
       };
       FileSkipped += (sender, e) =>
@@ -55,7 +45,8 @@ namespace AzCp
         lock (feedback)
         {
           feedback.WriteProgress();
-          logger.Information($"Skipped: {ToSourceDestination(e)}");
+          logger.Information($"Skipped: {getSourceToDestinationInfo(e)}");
+          e.Exception?.LogIt();
         }
         ArchiveFile(e);
       };
@@ -64,7 +55,8 @@ namespace AzCp
         lock (feedback)
         {
           feedback.WriteProgress();
-          logger.Information($"Transferred: {ToSourceDestination(e)}");
+          logger.Information($"Transferred: {getSourceToDestinationInfo(e)}");
+          e.Exception?.LogIt();
         }
         ArchiveFile(e);
       };

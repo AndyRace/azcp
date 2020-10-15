@@ -39,14 +39,7 @@ namespace AzCp
 #pragma warning disable CA1031 // Do not catch general exception types
       catch (Exception ex)
       {
-        if (_isDevelopment)
-        {
-          Log.Error(ex, Repository.ApplicationFullVersion);
-        }
-        else
-        {
-          Log.Error($@"{Repository.ApplicationFullVersion}: {ex.Message}");
-        }
+        ex.LogIt($@"{Repository.ApplicationFullVersion}: ");
 
         return 2;
       }
@@ -71,6 +64,8 @@ namespace AzCp
             services.AddTransient(typeof(IFeedback), typeof(ConsoleFeedback));
             services.AddHostedService<Application>();
             _isDevelopment = hostContext.HostingEnvironment.IsDevelopment();
+
+            ExceptionExtension.IsDevelopment = _isDevelopment;
           });
   }
 }

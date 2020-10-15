@@ -4,7 +4,6 @@ using System.IO;
 using System.Runtime.Serialization;
 using System.Runtime.Serialization.Formatters.Binary;
 using System.Runtime.Serialization.Json;
-using System.Text.Json;
 
 namespace AzCp
 {
@@ -16,22 +15,21 @@ namespace AzCp
     {
       lock (_lock)
       {
-        using (var writer = new FileStream(transferCheckpointFilename, FileMode.Create, FileAccess.Write))
-        {
-          if (transferCheckpoint.GetType().IsSerializable)
-          {
-            var formatter = new BinaryFormatter();
-            formatter.Serialize(writer, transferCheckpoint);
-          }
-          else
-          {
-            var ser = new DataContractJsonSerializer(transferCheckpoint.GetType());
-            ser.WriteObject(writer, transferCheckpoint);
-          }
+        using var writer = new FileStream(transferCheckpointFilename, FileMode.Create, FileAccess.Write);
 
-          writer.Flush();
-          writer.Close();
+        if (transferCheckpoint.GetType().IsSerializable)
+        {
+          var formatter = new BinaryFormatter();
+          formatter.Serialize(writer, transferCheckpoint);
         }
+        else
+        {
+          var ser = new DataContractJsonSerializer(transferCheckpoint.GetType());
+          ser.WriteObject(writer, transferCheckpoint);
+        }
+
+        writer.Flush();
+        writer.Close();
       }
     }
 
@@ -54,30 +52,26 @@ namespace AzCp
         //        }
         //        else
         {
-#pragma warning restore CA1031 // Do not catch general exception types
           try
           {
-            using (var reader = new FileStream(transferCheckpointFilename, FileMode.Open, FileAccess.Read))
+            using var reader = new FileStream(transferCheckpointFilename, FileMode.Open, FileAccess.Read);
+
+            if (typeof(TransferCheckpoint).IsSerializable)
             {
-              if (typeof(TransferCheckpoint).IsSerializable)
-              {
-                var formatter = new BinaryFormatter();
-                return formatter.Deserialize(reader) as TransferCheckpoint;
-              }
-              else
-              {
-                var ser = new DataContractJsonSerializer(typeof(TransferCheckpoint));
-                return ser.ReadObject(reader) as TransferCheckpoint;
-              }
+              var formatter = new BinaryFormatter();
+              return formatter.Deserialize(reader) as TransferCheckpoint;
+            }
+            else
+            {
+              var ser = new DataContractJsonSerializer(typeof(TransferCheckpoint));
+              return ser.ReadObject(reader) as TransferCheckpoint;
             }
           }
-#pragma warning disable CA1031 // Do not catch general exception types
           catch (Exception ex) when (ex is IOException | ex is SerializationException)
           {
             // ignore any IO exceptions (e.g. file not found) and return an empty checkpoint
             return null;
           }
-#pragma warning restore CA1031 // Do not catch general exception types
         }
       }
     }

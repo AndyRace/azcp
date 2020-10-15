@@ -1,5 +1,6 @@
 using Microsoft.Azure.Storage.Blob;
 using Microsoft.Azure.Storage.DataMovement;
+using Microsoft.Azure.Storage.File;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -14,6 +15,7 @@ namespace AzCp
     public const string AppSettingsSecretsJsonFilename = "appsettings.secrets.json";
 
     public Uri BlobContainerUri { get; set; }
+    public Uri FileContainerUri { get; set; }
 
     public string UploadFolder { get; set; } = "Upload";
     public string ArchiveFolder { get; set; } = "Archive";
@@ -58,11 +60,37 @@ namespace AzCp
       }
     }
 
-    public CloudBlobDirectory BlobDirectory
+    internal CloudBlobDirectory BlobDirectory
     {
       get
       {
-        return BlobContainerUri == null ? null : new CloudBlobContainer(BlobContainerUri).GetDirectoryReference("");
+        try
+        {
+          return BlobContainerUri == null ? null : new CloudBlobContainer(BlobContainerUri).GetDirectoryReference("");
+        }
+#pragma warning disable CA1031 // Do not catch general exception types
+        catch
+        {
+          return null;
+        }
+#pragma warning restore CA1031 // Do not catch general exception types
+      }
+    }
+
+    internal CloudFileDirectory FileDirectory
+    {
+      get
+      {
+        try
+        {
+          return FileContainerUri == null ? null : new CloudFileDirectory(FileContainerUri);
+        }
+#pragma warning disable CA1031 // Do not catch general exception types
+        catch
+        {
+          return null;
+        }
+#pragma warning restore CA1031 // Do not catch general exception types
       }
     }
 
@@ -90,6 +118,9 @@ namespace AzCp
           new string[] { nameof(Expect100Continue),          "Wait for '100' response?",     Expect100Continue.ToString(), repoDefaults.Expect100Continue.ToString() },
           new string[] { nameof(Recursive),                  "Recurse the upload folder",    Recursive.ToString(),     repoDefaults.Recursive.ToString() },
           Array.Empty<string>(),
+          new string[] { nameof(BlobContainerUri),           "Azure Blob Container",        BlobDirectory?.Uri.ToString(),     repoDefaults.BlobDirectory?.Uri.ToString() },
+          new string[] { nameof(FileContainerUri),           "Azure File Directory",        FileDirectory?.Uri.ToString(),     repoDefaults.FileDirectory?.Uri.ToString() },
+          Array.Empty<string>(),
           new string[] { "For details of the configuration options see: https://github.com/Azure/azure-storage-net-data-movement/" },
           };
 
@@ -113,9 +144,9 @@ namespace AzCp
 
     internal void UpdateEnvironmentFromSettings()
     {
-      if (BlobContainerUri == null)
+      if (BlobContainerUri == null && FileContainerUri == null)
       {
-        throw new Exception($"Please specify the URI to the BLOB container in the application settings file ({nameof(BlobContainerUri)})");
+        throw new Exception($"Please specify the URI to the Azure BLOB or Azure File container in the application settings file ({nameof(BlobContainerUri)} or {nameof(FileContainerUri)}");
       }
 
       if (string.IsNullOrEmpty(UploadFolder))

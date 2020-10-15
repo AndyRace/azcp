@@ -10,7 +10,7 @@ So if you have successfully uploaded 90% of your multi-Terrabyte file and AzCopy
 ## Overview
 
 1. AzCp monitors a specified folder for additional files (Uploads)
-2. AzCp copies these files into Azure BLOB Storage using a pre-provided SAS Token
+2. AzCp copies these files into Azure BLOB Storage or Azure Files using a pre-provided SAS Token
 3. AzCp archives the files once uploaded - moves them to another folder (Archive)
 4. AzCp resumes the upload if the tool is interrupted and restarted
 
@@ -22,9 +22,11 @@ So if you have successfully uploaded 90% of your multi-Terrabyte file and AzCopy
 ```
 {
   "Repository": {
-    // The 'BlobContainerUri' entry contains Shared Access Signature URI that you got from Azure Storage Explorer (for example)
+    // The 'BlobContainerUri' OR 'FileContainerUri' entries contain a Shared Access Signature URI that you got from Azure Storage Explorer (for example)
     // It is of the form:
     //   "BlobContainerUri": "https://{storage account name}.blob.core.windows.net/{container name}?{SAS query string}"
+    // or:
+    //   "FileContainerUri": "https://{storage account name}.file.core.windows.net/{folder name}?{SAS query string}"
   }
 }
 ```
