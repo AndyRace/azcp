@@ -17,4 +17,5 @@ if ($gitVersion -match 'v(\d+\.\d+)-(\d+)-(.*)') {
 }
 
 Write-Host "Publishing $informationalVersion ($fileVersion)"
-dotnet publish /p:DeployOnBuild=true /p:PublishProfile=FolderProfile /p:FileVersion=$fileVersion /p:InformationalVersion=$informationalVersion
+dotnet publish azcp.sln /p:DeployOnBuild=true /p:PublishProfile=FolderProfile /p:FileVersion=$fileVersion /p:InformationalVersion=$informationalVersion
+exit $LastExitCode
